@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// ─── PERSISTENT STATE HOOK ─────────────────────────────────────────────────
+// --- PERSISTENT STATE HOOK -------------------------------------------------
 function usePersistedState(key, defaultValue) {
   const [state, setStateRaw] = useState(() => {
     try {
@@ -20,13 +20,13 @@ function usePersistedState(key, defaultValue) {
   return [state, setState];
 }
 
-// ─── RESET HELPER (clears all app data from localStorage) ─────────────────
+// --- RESET HELPER (clears all app data from localStorage) -----------------
 function clearAllData() {
   ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal","pt_income"].forEach(k => localStorage.removeItem(k));
   window.location.reload();
 }
 
-// ─── INITIAL SEED DATA (your real positions) ───────────────────────────────
+// --- INITIAL SEED DATA (your real positions) -------------------------------
 const GOAL = 250000;
 
 const SEED_STOCKS = [
@@ -87,7 +87,7 @@ const SEED_INCOME = [
   { month: "2026-04", label: "Apr '26", premium: 890 },
 ];
 
-// ─── HELPERS ───────────────────────────────────────────────────────────────
+// --- HELPERS ---------------------------------------------------------------
 const AUD_USD = 0.7147;
 const toUSD = (val, currency) => currency === "AUD" ? val * AUD_USD : val;
 const fmt = (val, currency = "USD") => {
@@ -112,7 +112,7 @@ const getDteColor = (dte) => {
 };
 const uid = () => Math.random().toString(36).slice(2, 8);
 
-// ─── IBKR CSV PARSER ──────────────────────────────────────────────────────
+// --- IBKR CSV PARSER ------------------------------------------------------
 function parseIBKRcsv(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const stocks = []; const options = []; const trades = [];
@@ -146,7 +146,7 @@ function parseIBKRcsv(text) {
   return { stocks, options, trades };
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────
+// --- STYLES ---------------------------------------------------------------
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Bebas+Neue&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -186,7 +186,7 @@ body{background:#080c14;}
 .chip{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:2px;font-size:9px;padding:2px 6px;color:#a0aec0;}
 `;
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────
+// --- MAIN APP -------------------------------------------------------------
 export default function App() {
   const [nlv, setNlv]         = usePersistedState("pt_nlv",     182069);
   const [stocks, setStocks]   = usePersistedState("pt_stocks",  SEED_STOCKS);
@@ -200,11 +200,11 @@ export default function App() {
   const [showReset, setShowReset] = useState(false);
   const fileRef = useRef();
 
-  // ── derived ──
+  // -- derived --
   const stockPL  = stocks.reduce((s,p) => s + toUSD((p.lastPrice - p.avgPrice) * p.shares, p.currency), 0);
   const optionPL = options.reduce((s,o) => {
     const current = o.premium;
-    const openPremium = o.premium; // simplified — shows current mark
+    const openPremium = o.premium; // simplified -- shows current mark
     return s + (o.side === "short" ? 0 : 0); // P&L tracked via journal
   }, 0);
   const totalIncome = income.reduce((s,m) => s + m.premium, 0);
@@ -212,7 +212,7 @@ export default function App() {
   const progress    = Math.min((nlv / GOAL) * 100, 100);
   const remaining   = GOAL - nlv;
 
-  // ── IBKR import ──
+  // -- IBKR import --
   const handleFile = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -226,9 +226,9 @@ export default function App() {
         });
         if (o.length) setOptions(prev => [...prev, ...o]);
         if (t.length) setJournal(prev => [...t.map(x => ({...x, tags: x.tags || []})), ...prev]);
-        setImportMsg(`✓ Imported ${s.length} stocks, ${o.length} options, ${t.length} trades from IBKR`);
+        setImportMsg(`v Imported ${s.length} stocks, ${o.length} options, ${t.length} trades from IBKR`);
       } catch {
-        setImportMsg("⚠ Could not parse file. Ensure it's an IBKR Activity Statement CSV.");
+        setImportMsg("! Could not parse file. Ensure it's an IBKR Activity Statement CSV.");
       }
     };
     reader.readAsText(file);
@@ -242,15 +242,15 @@ export default function App() {
       <style>{CSS}</style>
       <div className="scanline"/>
 
-      {/* ── HEADER ── */}
+      {/* -- HEADER -- */}
       <div style={{ position:"relative", zIndex:1, borderBottom:"1px solid rgba(255,255,255,.07)", padding:"20px 20px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:12 }}>
           <div>
-            <div style={{ fontSize:9, letterSpacing:".2em", color:"#2d3748", marginBottom:4 }}>▸ PORTFOLIO TERMINAL v2</div>
+            <div style={{ fontSize:9, letterSpacing:".2em", color:"#2d3748", marginBottom:4 }}>> PORTFOLIO TERMINAL v2</div>
             <div className="header-title">TRADING DESK</div>
             <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:4 }}>
               <div style={{ fontSize:9, color:"#4a5568" }}>AUD/USD {AUD_USD}</div>
-              <div style={{ fontSize:9, color:"#00d4aa", letterSpacing:".05em" }}>● AUTO-SAVED</div>
+              <div style={{ fontSize:9, color:"#00d4aa", letterSpacing:".05em" }}>* AUTO-SAVED</div>
             </div>
           </div>
           <div style={{ textAlign:"right" }}>
@@ -269,15 +269,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── CONTENT ── */}
+      {/* -- CONTENT -- */}
       <div style={{ position:"relative", zIndex:1, padding:"16px 20px" }}>
 
-        {/* ══ OVERVIEW ══ */}
+        {/* == OVERVIEW == */}
         {tab === "overview" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             {/* Goal */}
             <div className="card">
-              <div className="section-title">▸ Goal Progress — $250,000</div>
+              <div className="section-title">> Goal Progress -- $250,000</div>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10, alignItems:"flex-end" }}>
                 <div>
                   <div className="lbl">Current</div>
@@ -317,7 +317,7 @@ export default function App() {
 
             {/* Income target */}
             <div className="card">
-              <div className="section-title">▸ Income Replacement Target — $8,000/mo</div>
+              <div className="section-title">> Income Replacement Target -- $8,000/mo</div>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8, fontSize:11 }}>
                 <span style={{ color:"#a0aec0" }}>Current avg</span>
                 <span style={{ color:"#00d4aa" }}>${avgIncome.toLocaleString()}/mo</span>
@@ -332,7 +332,7 @@ export default function App() {
 
             {/* Expiry timeline */}
             <div className="card">
-              <div className="section-title">▸ Upcoming Expiries</div>
+              <div className="section-title">> Upcoming Expiries</div>
               {[...options, ...spreads.map(s => ({ ...s, type:"spread", side:"short" }))]
                 .map(o => ({ ...o, dte: getDTE(o.expiry) }))
                 .sort((a,b) => a.dte - b.dte)
@@ -357,11 +357,11 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ POSITIONS ══ */}
+        {/* == POSITIONS == */}
         {tab === "positions" && (
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <div className="section-title" style={{ margin:0 }}>▸ Stock Positions</div>
+              <div className="section-title" style={{ margin:0 }}>> Stock Positions</div>
               <button className="btn btn-sm" onClick={() => setModal("stock")}>+ Add</button>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"70px 60px 70px 70px 70px 36px", gap:6, fontSize:9 }} className="tbl-hdr">
@@ -376,7 +376,7 @@ export default function App() {
                   <span style={{ color:"#6b7fa3" }}>{fmtPlain(p.avgPrice, p.currency)}</span>
                   <span>{fmtPlain(p.lastPrice, p.currency)}</span>
                   <span style={{ color: pl>=0?"#00d4aa":"#ff4444", fontWeight:600 }}>{fmt(pl, p.currency)}</span>
-                  <button className="btn btn-red btn-sm" onClick={() => setStocks(prev => prev.filter(x => x.id !== p.id))}>✕</button>
+                  <button className="btn btn-red btn-sm" onClick={() => setStocks(prev => prev.filter(x => x.id !== p.id))}>x</button>
                 </div>
               );
             })}
@@ -389,11 +389,11 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ OPTIONS ══ */}
+        {/* == OPTIONS == */}
         {tab === "options" && (
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <div className="section-title" style={{ margin:0 }}>▸ Single-Leg Options</div>
+              <div className="section-title" style={{ margin:0 }}>> Single-Leg Options</div>
               <button className="btn btn-sm" onClick={() => setModal("option")}>+ Add</button>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"60px 44px 50px 60px 44px 44px 36px", gap:6, fontSize:9 }} className="tbl-hdr">
@@ -409,18 +409,18 @@ export default function App() {
                   <span>${o.strike}</span>
                   <span style={{ fontSize:9, color:"#6b7fa3" }}>{o.expiry.slice(5)}</span>
                   <span className="dte-pill" style={{ background:`${getDteColor(dte)}18`, color:getDteColor(dte), border:`1px solid ${getDteColor(dte)}33`, fontSize:9 }}>{dte}d</span>
-                  <button className="btn btn-red btn-sm" onClick={() => setOptions(prev => prev.filter(x => x.id !== o.id))}>✕</button>
+                  <button className="btn btn-red btn-sm" onClick={() => setOptions(prev => prev.filter(x => x.id !== o.id))}>x</button>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* ══ SPREADS ══ */}
+        {/* == SPREADS == */}
         {tab === "spreads" && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div className="section-title" style={{ margin:0 }}>▸ Spread Positions</div>
+              <div className="section-title" style={{ margin:0 }}>> Spread Positions</div>
               <button className="btn btn-sm" onClick={() => setModal("spread")}>+ Add Spread</button>
             </div>
             {spreads.length === 0 && (
@@ -443,7 +443,7 @@ export default function App() {
                     </div>
                     <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                       <span className="dte-pill" style={{ background:`${getDteColor(dte)}18`, color:getDteColor(dte), border:`1px solid ${getDteColor(dte)}33` }}>{dte}d</span>
-                      <button className="btn btn-red btn-sm" onClick={() => setSpreads(prev => prev.filter(x => x.id !== sp.id))}>✕</button>
+                      <button className="btn btn-red btn-sm" onClick={() => setSpreads(prev => prev.filter(x => x.id !== sp.id))}>x</button>
                     </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:12 }}>
@@ -478,12 +478,12 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ INCOME ══ */}
+        {/* == INCOME == */}
         {tab === "income" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <div className="section-title" style={{ margin:0 }}>▸ Monthly Premium Income</div>
+                <div className="section-title" style={{ margin:0 }}>> Monthly Premium Income</div>
                 <button className="btn btn-sm" onClick={() => setModal("income")}>+ Add Month</button>
               </div>
               {income.length > 0 && (() => {
@@ -512,7 +512,7 @@ export default function App() {
               <div className="card"><div className="lbl">Monthly Avg</div><div className="metric-val" style={{ fontSize:24 }}>${avgIncome.toLocaleString()}</div></div>
             </div>
             <div className="card">
-              <div className="section-title">▸ Path to $8k/month</div>
+              <div className="section-title">> Path to $8k/month</div>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:8 }}>
                 <span style={{ color:"#a0aec0" }}>Current avg</span><span style={{ color:"#00d4aa" }}>${avgIncome}/mo</span>
               </div>
@@ -522,16 +522,16 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ JOURNAL ══ */}
+        {/* == JOURNAL == */}
         {tab === "journal" && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div className="section-title" style={{ margin:0 }}>▸ Trade Journal</div>
+              <div className="section-title" style={{ margin:0 }}>> Trade Journal</div>
               <button className="btn btn-sm" onClick={() => setModal("journal")}>+ Add Entry</button>
             </div>
             {journal.map(j => (
               <div key={j.id} className="card" style={{ position:"relative" }}>
-                <button className="btn btn-red btn-sm" style={{ position:"absolute", top:12, right:12 }} onClick={() => setJournal(prev => prev.filter(x => x.id !== j.id))}>✕</button>
+                <button className="btn btn-red btn-sm" style={{ position:"absolute", top:12, right:12 }} onClick={() => setJournal(prev => prev.filter(x => x.id !== j.id))}>x</button>
                 <div style={{ display:"flex", gap:10, alignItems:"baseline", marginBottom:8, paddingRight:40 }}>
                   <span style={{ color:"#00d4aa", fontWeight:600, fontSize:13 }}>{j.ticker}</span>
                   <span style={{ fontSize:10, color:"#a0aec0", letterSpacing:".05em" }}>{j.action}</span>
@@ -551,19 +551,19 @@ export default function App() {
           </div>
         )}
 
-        {/* ══ IMPORT ══ */}
+        {/* == IMPORT == */}
         {tab === "import" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
-              <div className="section-title">▸ Import IBKR Activity Statement</div>
+              <div className="section-title">> Import IBKR Activity Statement</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:16, lineHeight:1.7 }}>
                 Export your Activity Statement from IBKR as a <strong style={{ color:"#a0aec0" }}>CSV file</strong>, then upload it below. New positions will be merged with your existing data without duplicating existing tickers.
               </div>
               <div style={{ fontSize:10, color:"#4a5568", marginBottom:8, letterSpacing:".05em" }}>
-                In IBKR: Reports → Activity → Statements → Activity Statement → CSV
+                In IBKR: Reports -> Activity -> Statements -> Activity Statement -> CSV
               </div>
               <div className="upload-zone" onClick={() => fileRef.current?.click()}>
-                <div style={{ fontSize:24, marginBottom:8 }}>⬆</div>
+                <div style={{ fontSize:24, marginBottom:8 }}>^</div>
                 <div style={{ fontSize:11, color:"#a0aec0" }}>Click to upload IBKR Activity Statement CSV</div>
                 <div style={{ fontSize:9, color:"#4a5568", marginTop:4 }}>Parses: Open Positions, Options, Trades</div>
                 <input ref={fileRef} type="file" accept=".csv" style={{ display:"none" }} onChange={handleFile}/>
@@ -575,14 +575,14 @@ export default function App() {
               )}
             </div>
             <div className="card">
-              <div className="section-title">▸ Manual NLV Update</div>
+              <div className="section-title">> Manual NLV Update</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>
                 Update your Net Liquidation Value directly from your IBKR portfolio screen.
               </div>
               <button className="btn" onClick={() => setModal("nlv")}>Update NLV</button>
             </div>
             <div className="card">
-              <div className="section-title">▸ Reset All Data</div>
+              <div className="section-title">> Reset All Data</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>
                 Clears all positions, journal entries and income data from this device and reloads with seed data. <strong style={{ color:"#ff4444" }}>This cannot be undone.</strong>
               </div>
@@ -612,7 +612,7 @@ export default function App() {
         )}
       </div>
 
-      {/* ── MODALS ── */}
+      {/* -- MODALS -- */}
       {modal && (
         <div className="modal-bg" onClick={(e) => e.target === e.currentTarget && setModal(null)}>
           <div className="modal">
@@ -639,19 +639,19 @@ export default function App() {
       )}
       <div style={{ padding:"12px 20px", borderTop:"1px solid rgba(255,255,255,.05)", display:"flex", justifyContent:"space-between", fontSize:"9px", color:"#2d3748", letterSpacing:".1em", position:"relative", zIndex:1 }}>
         <span>PORTFOLIO TERMINAL v2.0</span>
-        <span style={{ color:"#00d4aa" }}>● AUTO-SAVED TO DEVICE</span>
+        <span style={{ color:"#00d4aa" }}>* AUTO-SAVED TO DEVICE</span>
         <span>AUD/USD {AUD_USD}</span>
       </div>
     </div>
   );
 }
 
-// ─── MODAL COMPONENTS ─────────────────────────────────────────────────────
+// --- MODAL COMPONENTS -----------------------------------------------------
 function ModalHeader({ title, onClose }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
       <div style={{ fontSize:11, letterSpacing:".15em", textTransform:"uppercase", color:"#00d4aa" }}>{title}</div>
-      <button className="btn btn-red btn-sm" onClick={onClose}>✕ Close</button>
+      <button className="btn btn-red btn-sm" onClick={onClose}>x Close</button>
     </div>
   );
 }
@@ -719,9 +719,9 @@ function SpreadModal({ onSave, onClose }) {
   const [f, setF] = useState({ ticker:"", strategy:"Bull Put Spread", shortStrike:"", longStrike:"", expiry:"", credit:"", qty:1, currency:"USD", notes:"", openDate: new Date().toISOString().slice(0,10) });
   const upd = (k,v) => setF(p => ({ ...p, [k]:v }));
   const width = f.shortStrike && f.longStrike ? Math.abs(f.shortStrike - f.longStrike) : 0;
-  const ror = width && f.credit ? ((+f.credit / width) * 100).toFixed(1) : "—";
-  const maxProfit = f.credit && f.qty ? (+f.credit * +f.qty * 100).toFixed(0) : "—";
-  const maxLoss   = width && f.credit && f.qty ? ((width - +f.credit) * +f.qty * 100).toFixed(0) : "—";
+  const ror = width && f.credit ? ((+f.credit / width) * 100).toFixed(1) : "--";
+  const maxProfit = f.credit && f.qty ? (+f.credit * +f.qty * 100).toFixed(0) : "--";
+  const maxLoss   = width && f.credit && f.qty ? ((width - +f.credit) * +f.qty * 100).toFixed(0) : "--";
   return (
     <>
       <ModalHeader title="Add Spread Position" onClose={onClose}/>
@@ -776,7 +776,7 @@ function JournalModal({ onSave, onClose }) {
       <Field label="Notes"><textarea className="inp" rows={3} style={{ resize:"vertical" }} value={f.notes} onChange={e => upd("notes",e.target.value)}/></Field>
       <Field label="Tags">
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:6 }}>
-          {f.tags.map((t,i) => <span key={i} className="tag">{t} <span style={{ cursor:"pointer", marginLeft:3 }} onClick={() => setF(p => ({ ...p, tags:p.tags.filter((_,j)=>j!==i) }))}>×</span></span>)}
+          {f.tags.map((t,i) => <span key={i} className="tag">{t} <span style={{ cursor:"pointer", marginLeft:3 }} onClick={() => setF(p => ({ ...p, tags:p.tags.filter((_,j)=>j!==i) }))}>x</span></span>)}
         </div>
         <div style={{ display:"flex", gap:6 }}>
           <input className="inp" placeholder="e.g. premium, roll, nvda" value={f.tagInput} onChange={e => upd("tagInput",e.target.value)} onKeyDown={e => e.key==="Enter" && addTag()}/>
