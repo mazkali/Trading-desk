@@ -246,7 +246,7 @@ export default function App() {
       <div style={{ position:"relative", zIndex:1, borderBottom:"1px solid rgba(255,255,255,.07)", padding:"20px 20px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:12 }}>
           <div>
-            <div style={{ fontSize:9, letterSpacing:".2em", color:"#2d3748", marginBottom:4 }}>PORTFOLIO TERMINAL v2</div>LIO TERMINAL v2</div>
+            <div style={{ fontSize:9, letterSpacing:".2em", color:"#2d3748", marginBottom:4 }}>PORTFOLIO TERMINAL v2</div>
             <div className="header-title">TRADING DESK</div>
             <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:4 }}>
               <div style={{ fontSize:9, color:"#4a5568" }}>AUD/USD {AUD_USD}</div>
@@ -277,7 +277,7 @@ export default function App() {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             {/* Goal */}
             <div className="card">
-              <div className="section-title"Goal Progress -- $250,000</div>
+              <div className="section-title">Goal Progress to $250,000</div>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10, alignItems:"flex-end" }}>
                 <div>
                   <div className="lbl">Current</div>
@@ -285,11 +285,11 @@ export default function App() {
                 </div>
                 <div style={{ textAlign:"center" }}>
                   <div className="lbl">Progress</div>
-                  <div className="metric-val" style={{ fontSize:20 }}>{progress.toFixed(1)}%</div>
+                  <div className="metric-val" style={{ font>Size:20 }}>{progress.toFixed(1)}%</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div className="lbl">Remaining</div>
-                  <div className="metric-val" style={{ fontSize:20, color:"#6b7fa3" }}>${remaining.toLocaleString()}</div>
+                  <div className="metric-val" style={{ font>Size:20, color:"#6b7fa3" }}>${remaining.toLocaleString()}</div>
                 </div>
               </div>
               <div className="progress-bar">
@@ -309,15 +309,15 @@ export default function App() {
                 { label:"Open Spreads", val:spreads.length,                      color:"#e2e8f0" },
               ].map((m,i) => (
                 <div key={i} className="card">
-                  <div className="lbl">{m.label}</div>
-                  <div className="metric-val" style={{ color:m.color, fontSize:22 }}>{m.val}</div>
+                  <div className="lbl">>{m.label}</div>
+                  <div className="metric-val" style={{ color:m.color, font>Size:22 }}>{m.val}</div>
                 </div>
               ))}
             </div>
 
             {/* Income target */}
             <div className="card">
-              <div className="section-title"Income Replacement Target -- $8,000/mo</div>
+              <div className="section-title">Income Replacement Target $8,000/mo</div>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8, fontSize:11 }}>
                 <span style={{ color:"#a0aec0" }}>Current avg</span>
                 <span style={{ color:"#00d4aa" }}>${avgIncome.toLocaleString()}/mo</span>
@@ -332,7 +332,7 @@ export default function App() {
 
             {/* Expiry timeline */}
             <div className="card">
-              <div className="section-title"Upcoming Expiries</div>
+              <div className="section-title">Upcoming Expiries</div>
               {[...options, ...spreads.map(s => ({ ...s, type:"spread", side:"short" }))]
                 .map(o => ({ ...o, dte: getDTE(o.expiry) }))
                 .sort((a,b) => a.dte - b.dte)
@@ -456,7 +456,7 @@ export default function App() {
                       { label:"Expiry",       val:sp.expiry.slice(5) },
                     ].map((m,i) => (
                       <div key={i}>
-                        <div className="lbl">{m.label}</div>
+                        <div className="lbl">>{m.label}</div>
                         <div style={{ fontSize:12, color: m.color || "#e2e8f0" }}>{m.val}</div>
                       </div>
                     ))}
@@ -508,11 +508,11 @@ export default function App() {
               })()}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <div className="card"><div className="lbl">Total YTD</div><div className="metric-val" style={{ color:"#00d4aa", fontSize:24 }}>${totalIncome.toLocaleString()}</div></div>
-              <div className="card"><div className="lbl">Monthly Avg</div><div className="metric-val" style={{ fontSize:24 }}>${avgIncome.toLocaleString()}</div></div>
+              <div className="card"><div className="lbl">Total YTD</div><div className="metric-val" style={{ color:"#00d4aa", font>Size:24 }}>${totalIncome.toLocaleString()}</div></div>
+              <div className="card"><div className="lbl">Monthly Avg</div><div className="metric-val" style={{ font>Size:24 }}>${avgIncome.toLocaleString()}</div></div>
             </div>
             <div className="card">
-              <div className="section-title"Path to $8k/month</div>
+              <div className="section-title">Path to $8k/month</div>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:8 }}>
                 <span style={{ color:"#a0aec0" }}>Current avg</span><span style={{ color:"#00d4aa" }}>${avgIncome}/mo</span>
               </div>
@@ -555,7 +555,7 @@ export default function App() {
         {tab === "import" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
-              <div className="section-title"Import IBKR Activity Statement</div>
+              <div className="section-title">Import IBKR Activity Statement</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:16, lineHeight:1.7 }}>
                 Export your Activity Statement from IBKR as a <strong style={{ color:"#a0aec0" }}>CSV file</strong>, then upload it below. New positions will be merged with your existing data without duplicating existing tickers.
               </div>
@@ -575,14 +575,14 @@ export default function App() {
               )}
             </div>
             <div className="card">
-              <div className="section-title"Manual NLV Update</div>
+              <div className="section-title">Manual NLV Update</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>
                 Update your Net Liquidation Value directly from your IBKR portfolio screen.
               </div>
               <button className="btn" onClick={() => setModal("nlv")}>Update NLV</button>
             </div>
             <div className="card">
-              <div className="section-title"Reset All Data</div>
+              <div className="section-title">Reset All Data</div>
               <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>
                 Clears all positions, journal entries and income data from this device and reloads with seed data. <strong style={{ color:"#ff4444" }}>This cannot be undone.</strong>
               </div>
@@ -657,7 +657,7 @@ function ModalHeader({ title, onClose }) {
 }
 
 function Field({ label, children }) {
-  return <div style={{ marginBottom:12 }}><div className="lbl">{label}</div>{children}</div>;
+  return <div style={{ marginBottom:12 }}><div className="lbl">>{label}</div>{children}</div>;
 }
 
 function NLVModal({ nlv, onSave, onClose }) {
