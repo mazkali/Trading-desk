@@ -285,11 +285,11 @@ export default function App() {
                 </div>
                 <div style={{ textAlign:"center" }}>
                   <div className="lbl">Progress</div>
-                  <div className="metric-val" style={{ font>Size:20 }}>{progress.toFixed(1)}%</div>
+                  <div className="metric-val" style={{ fontSize:20 }}>{progress.toFixed(1)}%</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div className="lbl">Remaining</div>
-                  <div className="metric-val" style={{ font>Size:20, color:"#6b7fa3" }}>${remaining.toLocaleString()}</div>
+                  <div className="metric-val" style={{ fontSize:20, color:"#6b7fa3" }}>${remaining.toLocaleString()}</div>
                 </div>
               </div>
               <div className="progress-bar">
@@ -310,7 +310,7 @@ export default function App() {
               ].map((m,i) => (
                 <div key={i} className="card">
                   <div className="lbl">>{m.label}</div>
-                  <div className="metric-val" style={{ color:m.color, font>Size:22 }}>{m.val}</div>
+                  <div className="metric-val" style={{ color:m.color, fontSize:22 }}>{m.val}</div>
                 </div>
               ))}
             </div>
@@ -508,8 +508,8 @@ export default function App() {
               })()}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <div className="card"><div className="lbl">Total YTD</div><div className="metric-val" style={{ color:"#00d4aa", font>Size:24 }}>${totalIncome.toLocaleString()}</div></div>
-              <div className="card"><div className="lbl">Monthly Avg</div><div className="metric-val" style={{ font>Size:24 }}>${avgIncome.toLocaleString()}</div></div>
+              <div className="card"><div className="lbl">Total YTD</div><div className="metric-val" style={{ color:"#00d4aa", fontSize:24 }}>${totalIncome.toLocaleString()}</div></div>
+              <div className="card"><div className="lbl">Monthly Avg</div><div className="metric-val" style={{ fontSize:24 }}>${avgIncome.toLocaleString()}</div></div>
             </div>
             <div className="card">
               <div className="section-title">Path to $8k/month</div>
