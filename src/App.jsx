@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-// --- PERSISTENT STATE HOOK -------------------------------------------------
+// PERSISTENT STATE HOOK
 function usePersistedState(key, defaultValue) {
   const [state, setStateRaw] = useState(() => {
     try {
@@ -20,13 +20,13 @@ function usePersistedState(key, defaultValue) {
   return [state, setState];
 }
 
-// --- RESET HELPER (clears all app data from localStorage) -----------------
+// RESET HELPER (clears all app data from localStorage)
 function clearAllData() {
   ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal","pt_income"].forEach(k => localStorage.removeItem(k));
   window.location.reload();
 }
 
-// --- INITIAL SEED DATA (your real positions) -------------------------------
+// INITIAL SEED DATA (your real positions)
 const GOAL = 250000;
 
 const SEED_STOCKS = [
@@ -87,7 +87,7 @@ const SEED_INCOME = [
   { month: "2026-04", label: "Apr '26", premium: 890 },
 ];
 
-// --- HELPERS ---------------------------------------------------------------
+// HELPERS
 const AUD_USD = 0.7147;
 const toUSD = (val, currency) => currency === "AUD" ? val * AUD_USD : val;
 const fmt = (val, currency = "USD") => {
@@ -112,7 +112,7 @@ const getDteColor = (dte) => {
 };
 const uid = () => Math.random().toString(36).slice(2, 8);
 
-// --- IBKR CSV PARSER ------------------------------------------------------
+// IBKR CSV PARSER
 function parseIBKRcsv(text) {
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
   const stocks = []; const options = []; const trades = [];
@@ -146,7 +146,7 @@ function parseIBKRcsv(text) {
   return { stocks, options, trades };
 }
 
-// --- STYLES ---------------------------------------------------------------
+// STYLES
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Bebas+Neue&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -186,7 +186,7 @@ body{background:#080c14;}
 .chip{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:2px;font-size:9px;padding:2px 6px;color:#a0aec0;}
 `;
 
-// --- MAIN APP -------------------------------------------------------------
+// MAIN APP
 export default function App() {
   const [nlv, setNlv]         = usePersistedState("pt_nlv",     182069);
   const [stocks, setStocks]   = usePersistedState("pt_stocks",  SEED_STOCKS);
@@ -200,7 +200,7 @@ export default function App() {
   const [showReset, setShowReset] = useState(false);
   const fileRef = useRef();
 
-  // -- derived --
+  // derived
   const stockPL  = stocks.reduce((s,p) => s + toUSD((p.lastPrice - p.avgPrice) * p.shares, p.currency), 0);
   const optionPL = options.reduce((s,o) => {
     const current = o.premium;
@@ -212,7 +212,7 @@ export default function App() {
   const progress    = Math.min((nlv / GOAL) * 100, 100);
   const remaining   = GOAL - nlv;
 
-  // -- IBKR import --
+  // IBKR import
   const handleFile = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -242,7 +242,7 @@ export default function App() {
       <style>{CSS}</style>
       <div className="scanline"/>
 
-      {/* -- HEADER -- */}
+      {/* HEADER */}
       <div style={{ position:"relative", zIndex:1, borderBottom:"1px solid rgba(255,255,255,.07)", padding:"20px 20px 0" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:12 }}>
           <div>
@@ -269,10 +269,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* -- CONTENT -- */}
+      {/* CONTENT */}
       <div style={{ position:"relative", zIndex:1, padding:"16px 20px" }}>
 
-        {/* == OVERVIEW == */}
+        {/* OVERVIEW */}
         {tab === "overview" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             {/* Goal */}
@@ -357,7 +357,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == POSITIONS == */}
+        {/* POSITIONS */}
         {tab === "positions" && (
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -389,7 +389,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == OPTIONS == */}
+        {/* OPTIONS */}
         {tab === "options" && (
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -416,7 +416,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == SPREADS == */}
+        {/* SPREADS */}
         {tab === "spreads" && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -478,7 +478,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == INCOME == */}
+        {/* INCOME */}
         {tab === "income" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
@@ -522,7 +522,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == JOURNAL == */}
+        {/* JOURNAL */}
         {tab === "journal" && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -551,7 +551,7 @@ export default function App() {
           </div>
         )}
 
-        {/* == IMPORT == */}
+        {/* IMPORT */}
         {tab === "import" && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
@@ -612,7 +612,7 @@ export default function App() {
         )}
       </div>
 
-      {/* -- MODALS -- */}
+      {/* MODALS */}
       {modal && (
         <div className="modal-bg" onClick={(e) => e.target === e.currentTarget && setModal(null)}>
           <div className="modal">
@@ -646,7 +646,7 @@ export default function App() {
   );
 }
 
-// --- MODAL COMPONENTS -----------------------------------------------------
+// MODAL COMPONENTS
 function ModalHeader({ title, onClose }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
