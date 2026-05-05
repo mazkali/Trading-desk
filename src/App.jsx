@@ -119,27 +119,164 @@ function uid() {
   return Math.random().toString(36).slice(2, 8);
 }
 
-function parseIBKRcsv(text) {
-  var lines = text.split("\n").map(function(l) { return l.trim(); }).filter(Boolean);
-  var stocks = []; var options = []; var trades = [];
-  var section = "";
-  for (var li = 0; li < lines.length; li++) {
-    var cols = lines[li].split(",").map(function(c) { return c.replace(/^"|"$/g, "").trim(); });
-    if (cols[0] === "Open Positions" && cols[1] === "Header") { section = "positions"; continue; }
-    if (cols[0] === "Trades" && cols[1] === "Header") { section = "trades"; continue; }
-    if (cols[1] === "Data") {
-      if (section === "positions") {
-        var cat = cols[2] || "";
-        if (cat === "Stocks" || cat === "Equity") {
-          stocks.push({ id:uid(), ticker:cols[3], shares:parseFloat(cols[5])||0, avgPrice:parseFloat(cols[6])||0, lastPrice:parseFloat(cols[7])||0, currency:cols[4]||"USD" });
-        }
-      }
-      if (section === "trades") {
-        trades.push({ id:uid(), date:(cols[6]||"").slice(0,10), ticker:cols[3], action:cols[2], price:parseFloat(cols[8])||0, qty:Math.abs(parseFloat(cols[7])||0), pnl:parseFloat(cols[11])||0, currency:cols[4]||"USD", notes:"Imported from IBKR", tags:["imported"] });
-      }
+function parseCSVLine(line) {
+  var result = [];
+  var current = "";
+  var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
     }
   }
-  return { stocks:stocks, options:options, trades:trades };
+  result.push(current.trim());
+  return result;
+}
+
+function parseExpiry(raw) {
+  var months = {JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",
+                JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12"};
+  if (raw.length >= 7) {
+    var day = raw.slice(0,2);
+    var mon = raw.slice(2,5).toUpperCase();
+    var yr = "20" + raw.slice(5,7);
+    return yr + "-" + (months[mon] || "01") + "-" + day;
+  }
+  return raw;
+}
+
+function parseIBKRcsv(text) {
+  var lines = text.split("\n");
+  var stocks = [];
+  var options = [];
+  var spreads = [];
+  var trades = [];
+  var seenSpreads = {};
+
+  for (var li = 0; li < lines.length; li++) {
+    var line = lines[li].trim();
+    if (!line) continue;
+    var cols = parseCSVLine(line);
+    if (cols.length < 4) continue;
+
+    var section = cols[0];
+    var disc = cols[1];
+
+    if (section === "Open Positions" && disc === "Data" && cols[2] === "Summary") {
+      var assetCat = cols[3] || "";
+      var currency = cols[4] || "USD";
+      var symbol = cols[5] || "";
+      var qty = parseFloat((cols[6] || "0").replace(/,/g,"")) || 0;
+      var avgPrice = parseFloat((cols[8] || "0").replace(/,/g,"")) || 0;
+      var lastPrice = parseFloat((cols[10] || "0").replace(/,/g,""));
+      if (isNaN(lastPrice)) lastPrice = avgPrice;
+
+      if (assetCat === "Stocks") {
+        stocks.push({
+          id: uid(),
+          ticker: symbol,
+          shares: Math.abs(qty),
+          avgPrice: avgPrice,
+          lastPrice: lastPrice,
+          currency: currency
+        });
+      }
+
+      if (assetCat.indexOf("Options") !== -1) {
+        var parts = symbol.split(" ");
+        if (parts.length >= 4) {
+          var ticker = parts[0];
+          var expiry = parseExpiry(parts[1]);
+          var strike = parseFloat(parts[2]) || 0;
+          var optType = parts[3] === "P" ? "put" : "call";
+          var side = qty < 0 ? "short" : "long";
+          var absQty = Math.abs(qty);
+
+          var spreadKey = ticker + "|" + expiry;
+          if (!seenSpreads[spreadKey]) {
+            seenSpreads[spreadKey] = [];
+          }
+          seenSpreads[spreadKey].push({ side:side, strike:strike, optType:optType, qty:absQty, premium:avgPrice, currency:currency });
+        }
+      }
+    }
+
+    if (section === "Trades" && disc === "Data" && cols[2] === "Order") {
+      var tradeCat = cols[3] || "";
+      var tradeCurr = cols[4] || "USD";
+      var tradeSym = cols[5] || "";
+      var tradeDate = (cols[6] || "").slice(0,10).replace(",","").trim();
+      var tradeQty = Math.abs(parseFloat((cols[7] || "0").replace(/,/g,"")) || 0);
+      var tradePrice = parseFloat((cols[8] || "0").replace(/,/g,"")) || 0;
+      var tradePnl = parseFloat((cols[13] || "0").replace(/,/g,"")) || 0;
+      var action = qty < 0 ? "SELL" : "BUY";
+      if (tradeCat.indexOf("Options") !== -1) action = "OPTION";
+
+      trades.push({
+        id: uid(),
+        date: tradeDate,
+        ticker: tradeSym,
+        action: action + " " + tradeCat.toUpperCase().slice(0,5),
+        price: tradePrice,
+        qty: tradeQty,
+        pnl: tradePnl,
+        currency: tradeCurr,
+        notes: "Imported from IBKR: " + tradeSym,
+        tags: ["imported"]
+      });
+    }
+  }
+
+  Object.keys(seenSpreads).forEach(function(key) {
+    var legs = seenSpreads[key];
+    var parts = key.split("|");
+    var ticker = parts[0];
+    var expiry = parts[1];
+    var shorts = legs.filter(function(l) { return l.side === "short"; });
+    var longs = legs.filter(function(l) { return l.side === "long"; });
+
+    if (shorts.length > 0 && longs.length > 0) {
+      var shortLeg = shorts[0];
+      var longLeg = longs[0];
+      var width = Math.abs(shortLeg.strike - longLeg.strike);
+      var credit = shortLeg.premium - longLeg.premium;
+      spreads.push({
+        id: uid(),
+        ticker: ticker,
+        strategy: shortLeg.optType === "put" ? "Bull Put Spread" : "Bear Call Spread",
+        shortStrike: shortLeg.strike,
+        longStrike: longLeg.strike,
+        expiry: expiry,
+        credit: Math.max(credit, 0),
+        qty: shortLeg.qty,
+        width: width,
+        currency: shortLeg.currency,
+        notes: "Imported from IBKR",
+        openDate: new Date().toISOString().slice(0,10)
+      });
+    } else {
+      legs.forEach(function(leg) {
+        options.push({
+          id: uid(),
+          ticker: ticker,
+          side: leg.side,
+          type: leg.optType,
+          strike: leg.strike,
+          expiry: expiry,
+          premium: leg.premium,
+          qty: leg.qty,
+          currency: leg.currency
+        });
+      });
+    }
+  });
+
+  return { stocks:stocks, options:options, spreads:spreads, trades:trades };
 }
 
 var STYLES = {
@@ -545,17 +682,24 @@ export default function App() {
       try {
         var result = parseIBKRcsv(ev.target.result);
         if (result.stocks.length) {
-          setStocks(function(prev) {
-            var tickers = new Set(prev.map(function(x) { return x.ticker; }));
-            return prev.concat(result.stocks.filter(function(x) { return !tickers.has(x.ticker); }));
-          });
+          setStocks(result.stocks);
+        }
+        if (result.options.length) {
+          setOptions(result.options);
+        }
+        if (result.spreads.length) {
+          setSpreads(result.spreads);
         }
         if (result.trades.length) {
-          setJournal(function(prev) { return result.trades.concat(prev); });
+          setJournal(function(prev) {
+            var existingDates = new Set(prev.filter(function(j) { return j.tags && j.tags.indexOf("imported") !== -1; }).map(function(j) { return j.date + j.ticker; }));
+            var newTrades = result.trades.filter(function(t) { return !existingDates.has(t.date + t.ticker); });
+            return newTrades.concat(prev);
+          });
         }
-        setImportMsg("Imported " + result.stocks.length + " stocks, " + result.trades.length + " trades from IBKR");
+        setImportMsg("Imported: " + result.stocks.length + " stocks, " + result.options.length + " options, " + result.spreads.length + " spreads, " + result.trades.length + " trades.");
       } catch(err) {
-        setImportMsg("Could not parse file. Ensure it is an IBKR Activity Statement CSV.");
+        setImportMsg("Could not parse file. Error: " + err.message);
       }
     };
     reader.readAsText(file);
@@ -597,7 +741,7 @@ export default function App() {
           {tabs.map(function(t) {
             var isActive = tab === t;
             return (
-              <button key={t} onClick={function() { setTab(t); }} style={{ background:"none", border:"none", borderBottom: isActive ? "2px solid #00d4aa" : "2px solid transparent", cursor:"pointer", fontFamily:"'IBM Plex Mono', monospace", fontSize:10, letterSpacing:"0.15em", textTransform:"uppercase", padding:"8px 14px", color: isActive ? "#00d4aa" : "#4a5568", whiteSpace:"nowrap" }}>
+              <button key={t} onClick={function() { setTab(t); }} style={{ background:"none", border:"none", borderBottom: isActive ? "2px solid #00d4aa" : "2px solid transparent", cursor:"pointer", fontFamily:"'IBM Plex Mono', monospace", fontSize:10, letterSpacing:"0.15em", textTransform:"uppercase", padding:"8px 14px", color: isActive ? "#00d4aa" : "#8a9ab5", whiteSpace:"nowrap" }}>
                 {t}
               </button>
             );
