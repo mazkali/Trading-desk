@@ -2,12 +2,8 @@ import { useState, useRef, useCallback } from "react";
 
 function usePersistedState(key, defaultValue) {
   const [state, setStateRaw] = useState(function() {
-    try {
-      var stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : defaultValue;
-    } catch(e) {
-      return defaultValue;
-    }
+    try { var s = localStorage.getItem(key); return s ? JSON.parse(s) : defaultValue; }
+    catch(e) { return defaultValue; }
   });
   var setState = useCallback(function(valOrFn) {
     setStateRaw(function(prev) {
@@ -20,9 +16,7 @@ function usePersistedState(key, defaultValue) {
 }
 
 function clearAllData() {
-  ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal","pt_income"].forEach(function(k) {
-    localStorage.removeItem(k);
-  });
+  ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal","pt_income"].forEach(function(k) { localStorage.removeItem(k); });
   window.location.reload();
 }
 
@@ -34,7 +28,6 @@ var SEED_STOCKS = [
   { id:"s2", ticker:"GOOG",  shares:100,   avgPrice:310.00, lastPrice:347.65, currency:"USD" },
   { id:"s3", ticker:"SPY",   shares:100,   avgPrice:706.44, lastPrice:712.80, currency:"USD" },
   { id:"s4", ticker:"JEPQ",  shares:200,   avgPrice:51.61,  lastPrice:58.99,  currency:"USD" },
-  { id:"s5", ticker:"FSCO",  shares:1058,  avgPrice:6.76,   lastPrice:5.22,   currency:"USD" },
   { id:"s6", ticker:"IMU",   shares:958,   avgPrice:0.126,  lastPrice:0.115,  currency:"AUD" },
   { id:"s7", ticker:"PCI",   shares:10000, avgPrice:1.153,  lastPrice:1.094,  currency:"AUD" },
 ];
@@ -46,38 +39,15 @@ var SEED_OPTIONS = [
   { id:"o4", ticker:"ASTS",  side:"short", type:"put",  strike:50,  expiry:"2026-05-29", premium:1.00,  qty:3, currency:"USD" },
   { id:"o5", ticker:"NBIS",  side:"short", type:"put",  strike:100, expiry:"2026-05-22", premium:2.60,  qty:2, currency:"USD" },
   { id:"o6", ticker:"NVDA",  side:"short", type:"put",  strike:140, expiry:"2028-01-21", premium:12.73, qty:1, currency:"USD" },
-  { id:"o7", ticker:"QQQ",   side:"short", type:"put",  strike:579, expiry:"2026-05-29", premium:2.00,  qty:1, currency:"USD" },
 ];
 
 var SEED_SPREADS = [
-  {
-    id:"sp1", ticker:"NVDA", strategy:"Bull Put Spread",
-    shortStrike:180, longStrike:175, expiry:"2026-06-05",
-    credit:0.64, qty:5, width:5, currency:"USD",
-    notes:"Post-tariff recovery play. Earnings May 21 - watch closely.",
-    openDate:"2026-04-28",
-  },
+  { id:"sp1", ticker:"NVDA", strategy:"Bull Put Spread", shortStrike:180, longStrike:175, expiry:"2026-06-05", credit:0.64, currentMark:0.40, qty:5, width:5, currency:"USD", notes:"Post-tariff recovery play.", openDate:"2026-04-28" },
 ];
 
 var SEED_JOURNAL = [
-  {
-    id:"j1", date:"2026-04-27", ticker:"CVL", action:"SELL STOCK",
-    price:1.48, qty:4963, pnl:2691, currency:"AUD",
-    notes:"Sold CVL ASX. 54% gain. Proceeds to clear IBKR margin debt.",
-    tags:["exit","profit","portfolio-cleanup"],
-  },
-  {
-    id:"j2", date:"2026-03-17", ticker:"NVDA", action:"SELL PUT",
-    price:19.47, qty:1, pnl:574, currency:"USD",
-    notes:"Sold NVDA Jan 2028 $140 Put into tariff selloff. Target 70-80% profit before closing.",
-    tags:["premium","long-dated","nvda"],
-  },
-  {
-    id:"j3", date:"2026-04-15", ticker:"GOOG", action:"ROLL CALL",
-    price:0, qty:1, pnl:0, currency:"USD",
-    notes:"Rolled $320 CC to $350 Aug 21 for small credit. 118 DTE.",
-    tags:["roll","covered-call","goog"],
-  },
+  { id:"j1", date:"2026-04-27", ticker:"CVL", action:"SELL STOCK", price:1.48, qty:4963, pnl:2691, currency:"AUD", notes:"Sold CVL ASX. 54% gain.", tags:["exit","profit"] },
+  { id:"j2", date:"2026-03-17", ticker:"NVDA", action:"SELL PUT", price:19.47, qty:1, pnl:574, currency:"USD", notes:"Sold NVDA Jan 2028 $140 Put. Target 70-80% profit.", tags:["premium","nvda"] },
 ];
 
 var SEED_INCOME = [
@@ -87,661 +57,445 @@ var SEED_INCOME = [
   { month:"2026-04", label:"Apr 26", premium:890 },
 ];
 
-function toUSD(val, currency) {
-  return currency === "AUD" ? val * AUD_USD : val;
-}
-
-function fmtMoney(val, currency) {
-  var prefix = currency === "AUD" ? "A$" : "$";
-  var abs = Math.abs(val);
-  var s = abs >= 1000 ? prefix + (abs / 1000).toFixed(1) + "k" : prefix + abs.toFixed(0);
+function toUSD(val, cur) { return cur === "AUD" ? val * AUD_USD : val; }
+function fmtSign(val, cur) {
+  var p = cur === "AUD" ? "A$" : "$";
+  var a = Math.abs(val);
+  var s = a >= 1000 ? p + (a/1000).toFixed(1) + "k" : p + a.toFixed(0);
   return val < 0 ? "-" + s : "+" + s;
 }
-
-function fmtPlain(val, currency) {
-  var prefix = currency === "AUD" ? "A$" : "$";
-  return prefix + Math.abs(val).toFixed(2);
-}
-
-function getDTE(expiry) {
-  var diff = new Date(expiry) - new Date();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-function getDteColor(dte) {
-  if (dte <= 7)  return "#ff4444";
-  if (dte <= 21) return "#ffaa00";
-  if (dte <= 45) return "#00d4aa";
-  return "#6b7fa3";
-}
-
-function uid() {
-  return Math.random().toString(36).slice(2, 8);
-}
+function fmtPlain(val, cur) { return (cur === "AUD" ? "A$" : "$") + Math.abs(val).toFixed(2); }
+function getDTE(exp) { return Math.max(0, Math.ceil((new Date(exp) - new Date()) / 86400000)); }
+function getDteColor(d) { return d <= 7 ? "#ff6b6b" : d <= 21 ? "#ffd166" : d <= 45 ? "#06d6a0" : "#74b9ff"; }
+function uid() { return Math.random().toString(36).slice(2,8); }
 
 function parseCSVLine(line) {
-  var result = [];
-  var current = "";
-  var inQuotes = false;
-  for (var i = 0; i < line.length; i++) {
-    var ch = line[i];
-    if (ch === '"') {
-      inQuotes = !inQuotes;
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
+  var r=[],cur="",q=false;
+  for(var i=0;i<line.length;i++){
+    var c=line[i];
+    if(c==='"'){q=!q;}
+    else if(c===','&&!q){r.push(cur.trim());cur="";}
+    else{cur+=c;}
   }
-  result.push(current.trim());
-  return result;
+  r.push(cur.trim());
+  return r;
 }
 
 function parseExpiry(raw) {
-  var months = {JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",
-                JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12"};
-  if (raw.length >= 7) {
-    var day = raw.slice(0,2);
-    var mon = raw.slice(2,5).toUpperCase();
-    var yr = "20" + raw.slice(5,7);
-    return yr + "-" + (months[mon] || "01") + "-" + day;
+  var M={JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12"};
+  if(raw&&raw.length>=7){
+    return "20"+raw.slice(5,7)+"-"+(M[raw.slice(2,5).toUpperCase()]||"01")+"-"+raw.slice(0,2);
   }
   return raw;
 }
 
 function parseIBKRcsv(text) {
-  var lines = text.split("\n");
-  var stocks = [];
-  var options = [];
-  var spreads = [];
-  var trades = [];
-  var seenSpreads = {};
-
-  for (var li = 0; li < lines.length; li++) {
-    var line = lines[li].trim();
-    if (!line) continue;
-    var cols = parseCSVLine(line);
-    if (cols.length < 4) continue;
-
-    var section = cols[0];
-    var disc = cols[1];
-
-    if (section === "Open Positions" && disc === "Data" && cols[2] === "Summary") {
-      var assetCat = cols[3] || "";
-      var currency = cols[4] || "USD";
-      var symbol = cols[5] || "";
-      var qty = parseFloat((cols[6] || "0").replace(/,/g,"")) || 0;
-      var avgPrice = parseFloat((cols[8] || "0").replace(/,/g,"")) || 0;
-      var lastPrice = parseFloat((cols[10] || "0").replace(/,/g,""));
-      if (isNaN(lastPrice)) lastPrice = avgPrice;
-
-      if (assetCat === "Stocks") {
-        stocks.push({
-          id: uid(),
-          ticker: symbol,
-          shares: Math.abs(qty),
-          avgPrice: avgPrice,
-          lastPrice: lastPrice,
-          currency: currency
-        });
+  var lines=text.split("\n"), stocks=[], options=[], spreads=[], trades=[], seen={};
+  for(var li=0;li<lines.length;li++){
+    var line=lines[li].trim();
+    if(!line) continue;
+    var c=parseCSVLine(line);
+    if(c.length<4) continue;
+    if(c[0]==="Open Positions"&&c[1]==="Data"&&c[2]==="Summary"){
+      var cat=c[3]||"", cur=c[4]||"USD", sym=c[5]||"";
+      var qty=parseFloat((c[6]||"0").replace(/,/g,""))||0;
+      var avg=parseFloat((c[8]||"0").replace(/,/g,""))||0;
+      var last=parseFloat((c[10]||"0").replace(/,/g,""));
+      if(isNaN(last)) last=avg;
+      if(cat==="Stocks"){
+        stocks.push({id:uid(),ticker:sym,shares:Math.abs(qty),avgPrice:avg,lastPrice:last,currency:cur});
       }
-
-      if (assetCat.indexOf("Options") !== -1) {
-        var parts = symbol.split(" ");
-        if (parts.length >= 4) {
-          var ticker = parts[0];
-          var expiry = parseExpiry(parts[1]);
-          var strike = parseFloat(parts[2]) || 0;
-          var optType = parts[3] === "P" ? "put" : "call";
-          var side = qty < 0 ? "short" : "long";
-          var absQty = Math.abs(qty);
-
-          var spreadKey = ticker + "|" + expiry;
-          if (!seenSpreads[spreadKey]) {
-            seenSpreads[spreadKey] = [];
-          }
-          seenSpreads[spreadKey].push({ side:side, strike:strike, optType:optType, qty:absQty, premium:avgPrice, currency:currency });
+      if(cat.indexOf("Options")!==-1){
+        var pts=sym.split(" ");
+        if(pts.length>=4){
+          var tk=pts[0], exp=parseExpiry(pts[1]), stk=parseFloat(pts[2])||0;
+          var ot=pts[3]==="P"?"put":"call", sd=qty<0?"short":"long";
+          var sk=tk+"|"+exp;
+          if(!seen[sk]) seen[sk]=[];
+          seen[sk].push({side:sd,strike:stk,optType:ot,qty:Math.abs(qty),premium:avg,currentMark:last,currency:cur});
         }
       }
     }
-
-    if (section === "Trades" && disc === "Data" && cols[2] === "Order") {
-      var tradeCat = cols[3] || "";
-      var tradeCurr = cols[4] || "USD";
-      var tradeSym = cols[5] || "";
-      var tradeDate = (cols[6] || "").slice(0,10).replace(",","").trim();
-      var tradeQty = Math.abs(parseFloat((cols[7] || "0").replace(/,/g,"")) || 0);
-      var tradePrice = parseFloat((cols[8] || "0").replace(/,/g,"")) || 0;
-      var tradePnl = parseFloat((cols[13] || "0").replace(/,/g,"")) || 0;
-      var action = qty < 0 ? "SELL" : "BUY";
-      if (tradeCat.indexOf("Options") !== -1) action = "OPTION";
-
-      trades.push({
-        id: uid(),
-        date: tradeDate,
-        ticker: tradeSym,
-        action: action + " " + tradeCat.toUpperCase().slice(0,5),
-        price: tradePrice,
-        qty: tradeQty,
-        pnl: tradePnl,
-        currency: tradeCurr,
-        notes: "Imported from IBKR: " + tradeSym,
-        tags: ["imported"]
-      });
+    if(c[0]==="Trades"&&c[1]==="Data"&&c[2]==="Order"){
+      var tcat=c[3]||"", tcur=c[4]||"USD", tsym=c[5]||"";
+      var td=(c[6]||"").slice(0,10).replace(",","").trim();
+      var tqty=Math.abs(parseFloat((c[7]||"0").replace(/,/g,""))||0);
+      var tprice=parseFloat((c[8]||"0").replace(/,/g,""))||0;
+      var tpnl=parseFloat((c[13]||"0").replace(/,/g,""))||0;
+      var tqn=parseFloat((c[7]||"0").replace(/,/g,""))||0;
+      var tact=tcat.indexOf("Options")!==-1?(tqn<0?"SELL OPTION":"BUY OPTION"):(tqn<0?"SELL":"BUY");
+      trades.push({id:uid(),date:td,ticker:tsym,action:tact,price:tprice,qty:tqty,pnl:tpnl,currency:tcur,notes:"Imported: "+tsym,tags:["imported"]});
     }
   }
-
-  Object.keys(seenSpreads).forEach(function(key) {
-    var legs = seenSpreads[key];
-    var parts = key.split("|");
-    var ticker = parts[0];
-    var expiry = parts[1];
-    var shorts = legs.filter(function(l) { return l.side === "short"; });
-    var longs = legs.filter(function(l) { return l.side === "long"; });
-
-    if (shorts.length > 0 && longs.length > 0) {
-      var shortLeg = shorts[0];
-      var longLeg = longs[0];
-      var width = Math.abs(shortLeg.strike - longLeg.strike);
-      var credit = shortLeg.premium - longLeg.premium;
-      spreads.push({
-        id: uid(),
-        ticker: ticker,
-        strategy: shortLeg.optType === "put" ? "Bull Put Spread" : "Bear Call Spread",
-        shortStrike: shortLeg.strike,
-        longStrike: longLeg.strike,
-        expiry: expiry,
-        credit: Math.max(credit, 0),
-        qty: shortLeg.qty,
-        width: width,
-        currency: shortLeg.currency,
-        notes: "Imported from IBKR",
-        openDate: new Date().toISOString().slice(0,10)
-      });
+  Object.keys(seen).forEach(function(key){
+    var legs=seen[key], pts=key.split("|"), tk=pts[0], exp=pts[1];
+    var sh=legs.filter(function(l){return l.side==="short";}), lg=legs.filter(function(l){return l.side==="long";});
+    if(sh.length>0&&lg.length>0){
+      var s=sh[0], l=lg[0];
+      var w=parseFloat(Math.abs(s.strike-l.strike).toFixed(2));
+      var cr=parseFloat(Math.max(s.premium-l.premium,0).toFixed(4));
+      var cm=parseFloat(Math.max(s.currentMark-l.currentMark,0).toFixed(4));
+      spreads.push({id:uid(),ticker:tk,strategy:s.optType==="put"?"Bull Put Spread":"Bear Call Spread",shortStrike:s.strike,longStrike:l.strike,expiry:exp,credit:cr,currentMark:cm,qty:s.qty,width:w,currency:s.currency,notes:"Imported from IBKR",openDate:new Date().toISOString().slice(0,10)});
     } else {
-      legs.forEach(function(leg) {
-        options.push({
-          id: uid(),
-          ticker: ticker,
-          side: leg.side,
-          type: leg.optType,
-          strike: leg.strike,
-          expiry: expiry,
-          premium: leg.premium,
-          qty: leg.qty,
-          currency: leg.currency
-        });
+      legs.forEach(function(leg){
+        options.push({id:uid(),ticker:tk,side:leg.side,type:leg.optType,strike:leg.strike,expiry:exp,premium:leg.premium,qty:leg.qty,currency:leg.currency});
       });
     }
   });
-
-  return { stocks:stocks, options:options, spreads:spreads, trades:trades };
+  return {stocks:stocks,options:options,spreads:spreads,trades:trades};
 }
 
-var STYLES = {
-  app: { minHeight:"100vh", background:"#080c14", color:"#e2e8f0", fontFamily:"'IBM Plex Mono', 'Courier New', monospace", paddingBottom:40 },
-  card: { background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:4, padding:18, position:"relative", overflow:"hidden", marginBottom:12 },
-  sectionTitle: { fontSize:9, letterSpacing:"0.18em", textTransform:"uppercase", color:"#4a5568", marginBottom:14 },
-  lbl: { fontSize:9, letterSpacing:"0.12em", textTransform:"uppercase", color:"#4a5568", marginBottom:4 },
-  metricVal: { fontFamily:"'Bebas Neue', sans-serif", fontSize:26, letterSpacing:"0.05em", lineHeight:1 },
-  ticker: { color:"#00d4aa", fontWeight:600, fontSize:11 },
-  inp: { background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#e2e8f0", fontFamily:"'IBM Plex Mono', monospace", fontSize:11, padding:"6px 10px", borderRadius:3, width:"100%", outline:"none" },
-  btn: { background:"rgba(0,212,170,0.1)", border:"1px solid rgba(0,212,170,0.3)", color:"#00d4aa", fontFamily:"'IBM Plex Mono', monospace", fontSize:10, letterSpacing:"0.1em", padding:"6px 14px", borderRadius:3, cursor:"pointer" },
-  btnRed: { background:"rgba(255,68,68,0.1)", border:"1px solid rgba(255,68,68,0.3)", color:"#ff4444", fontFamily:"'IBM Plex Mono', monospace", fontSize:10, padding:"3px 8px", borderRadius:3, cursor:"pointer" },
-  progressBar: { height:5, background:"rgba(255,255,255,0.07)", borderRadius:3, overflow:"hidden" },
-  tag: { display:"inline-block", background:"rgba(0,168,255,0.12)", border:"1px solid rgba(0,168,255,0.25)", color:"#00a8ff", fontSize:9, padding:"1px 6px", borderRadius:2, marginRight:4 },
-  modalBg: { position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:100, display:"flex", alignItems:"center", justifyContent:"center", padding:16 },
-  modal: { background:"#0d1420", border:"1px solid rgba(0,212,170,0.2)", borderRadius:6, padding:24, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto" },
+var C = {
+  bg:"#0a0e1a", surface:"#111827", border:"rgba(255,255,255,0.08)", borderHi:"rgba(99,179,237,0.3)",
+  green:"#06d6a0", greenDim:"rgba(6,214,160,0.1)", red:"#ff6b6b", redDim:"rgba(255,107,107,0.1)",
+  yellow:"#ffd166", blue:"#74b9ff", text:"#e2e8f0", textMid:"#a0aec0", textDim:"#718096", textFaint:"#4a5568"
 };
 
-function Card(props) {
+var S = {
+  app:    {minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'IBM Plex Mono','Courier New',monospace",paddingBottom:48},
+  card:   {background:C.surface,border:"1px solid "+C.border,borderRadius:6,padding:20,position:"relative",overflow:"hidden",marginBottom:12},
+  lbl:    {fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:4},
+  big:    {fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:"0.05em",lineHeight:1},
+  ticker: {color:C.green,fontWeight:600,fontSize:12},
+  inp:    {background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:C.text,fontFamily:"'IBM Plex Mono',monospace",fontSize:11,padding:"7px 10px",borderRadius:4,width:"100%",outline:"none"},
+  btn:    {background:"rgba(6,214,160,0.12)",border:"1px solid rgba(6,214,160,0.35)",color:C.green,fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:"0.08em",padding:"7px 16px",borderRadius:4,cursor:"pointer"},
+  btnRed: {background:"rgba(255,107,107,0.1)",border:"1px solid rgba(255,107,107,0.3)",color:C.red,fontFamily:"'IBM Plex Mono',monospace",fontSize:10,padding:"4px 9px",borderRadius:4,cursor:"pointer"},
+  pbar:   {height:5,background:"rgba(255,255,255,0.07)",borderRadius:3,overflow:"hidden"},
+  tag:    {display:"inline-block",background:"rgba(116,185,255,0.12)",border:"1px solid rgba(116,185,255,0.25)",color:C.blue,fontSize:9,padding:"1px 6px",borderRadius:2,marginRight:4},
+  modalBg:{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:16},
+  modal:  {background:"#0d1420",border:"1px solid rgba(6,214,160,0.25)",borderRadius:8,padding:24,width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto"},
+};
+
+function BarFill(props) {
+  var pct = Math.min(Math.max(props.pct||0,0),100);
   return (
-    <div style={STYLES.card}>
-      <div style={{ position:"absolute", top:0, left:0, right:0, height:1, background:"linear-gradient(90deg,transparent,rgba(0,212,170,0.25),transparent)" }} />
-      {props.children}
-    </div>
-  );
-}
-
-function Btn(props) {
-  return <button style={Object.assign({}, STYLES.btn, props.style || {})} onClick={props.onClick}>{props.children}</button>;
-}
-
-function BtnRed(props) {
-  return <button style={STYLES.btnRed} onClick={props.onClick}>{props.children}</button>;
-}
-
-function Inp(props) {
-  return <input style={STYLES.inp} type={props.type || "text"} value={props.value} onChange={props.onChange} placeholder={props.placeholder || ""} />;
-}
-
-function Lbl(props) {
-  return <div style={STYLES.lbl}>{props.children}</div>;
-}
-
-function Field(props) {
-  return (
-    <div style={{ marginBottom:12 }}>
-      <Lbl>{props.label}</Lbl>
-      {props.children}
-    </div>
-  );
-}
-
-function DtePill(props) {
-  var color = getDteColor(props.dte);
-  return (
-    <span style={{ display:"inline-block", padding:"2px 7px", borderRadius:2, fontSize:9, fontWeight:600, background:color+"18", color:color, border:"1px solid "+color+"33" }}>
-      {props.dte}d
-    </span>
-  );
-}
-
-function ProgressBar(props) {
-  return (
-    <div style={STYLES.progressBar}>
-      <div style={{ height:"100%", width:props.pct+"%", background:props.gradient || "linear-gradient(90deg,#00d4aa,#00a8ff)", borderRadius:3, transition:"width 0.8s ease", position:"relative" }}>
-        <div style={{ position:"absolute", right:0, top:-3, bottom:-3, width:2, background:"white", borderRadius:2, boxShadow:"0 0 8px rgba(0,212,170,0.9)" }} />
+    <div style={S.pbar}>
+      <div style={{height:"100%",width:pct+"%",background:props.gradient||("linear-gradient(90deg,"+C.green+","+C.blue+")"),borderRadius:3,transition:"width 0.8s ease",position:"relative"}}>
+        <div style={{position:"absolute",right:0,top:-3,bottom:-3,width:2,background:"white",borderRadius:2,boxShadow:"0 0 8px rgba(6,214,160,0.9)"}} />
       </div>
     </div>
   );
 }
 
+function Card(props) {
+  return (
+    <div style={Object.assign({},S.card,props.style||{})}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(6,214,160,0.3),transparent)"}} />
+      {props.children}
+    </div>
+  );
+}
+
+function Btn(props) { return <button style={Object.assign({},S.btn,props.style||{})} onClick={props.onClick}>{props.children}</button>; }
+function BtnRed(props) { return <button style={S.btnRed} onClick={props.onClick}>{props.children}</button>; }
+function Inp(props) { return <input style={S.inp} type={props.type||"text"} value={props.value} onChange={props.onChange} placeholder={props.placeholder||""} />; }
+function Field(props) { return <div style={{marginBottom:12}}><div style={S.lbl}>{props.label}</div>{props.children}</div>; }
+function DtePill(props) {
+  var color=getDteColor(props.dte);
+  return <span style={{display:"inline-block",padding:"3px 8px",borderRadius:3,fontSize:9,fontWeight:600,background:color+"20",color:color,border:"1px solid "+color+"40"}}>{props.dte}d</span>;
+}
 function ModalHeader(props) {
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-      <div style={{ fontSize:11, letterSpacing:"0.15em", textTransform:"uppercase", color:"#00d4aa" }}>{props.title}</div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <div style={{fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",color:C.green}}>{props.title}</div>
       <BtnRed onClick={props.onClose}>Close</BtnRed>
     </div>
   );
 }
 
 function NLVModal(props) {
-  var [val, setVal] = useState(props.nlv);
-  return (
-    <div>
-      <ModalHeader title="Update Net Liq Value" onClose={props.onClose} />
-      <Field label="NLV (USD)">
-        <Inp type="number" value={val} onChange={function(e) { setVal(+e.target.value); }} />
-      </Field>
-      <Btn style={{ width:"100%", marginTop:8 }} onClick={function() { props.onSave(val); }}>Save</Btn>
-    </div>
-  );
+  var [val,setVal]=useState(props.nlv);
+  return (<div><ModalHeader title="Update Net Liq Value" onClose={props.onClose} /><Field label="NLV (USD)"><Inp type="number" value={val} onChange={function(e){setVal(+e.target.value);}} /></Field><Btn style={{width:"100%",marginTop:8}} onClick={function(){props.onSave(val);}}>Save</Btn></div>);
 }
 
 function StockModal(props) {
-  var [f, setF] = useState({ ticker:"", shares:"", avgPrice:"", lastPrice:"", currency:"USD" });
-  function upd(k, v) { setF(function(p) { return Object.assign({}, p, { [k]:v }); }); }
+  var [f,setF]=useState({ticker:"",shares:"",avgPrice:"",lastPrice:"",currency:"USD"});
+  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
   return (
     <div>
       <ModalHeader title="Add Stock Position" onClose={props.onClose} />
-      <Field label="Ticker">
-        <Inp value={f.ticker} onChange={function(e) { upd("ticker", e.target.value.toUpperCase()); }} />
-      </Field>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Shares">
-            <Inp type="number" value={f.shares} onChange={function(e) { upd("shares", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Currency">
-            <select style={STYLES.inp} value={f.currency} onChange={function(e) { upd("currency", e.target.value); }}>
-              <option>USD</option>
-              <option>AUD</option>
-            </select>
-          </Field>
-        </div>
+      <Field label="Ticker"><Inp value={f.ticker} onChange={function(e){upd("ticker",e.target.value.toUpperCase());}} /></Field>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Shares"><Inp type="number" value={f.shares} onChange={function(e){upd("shares",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Currency"><select style={S.inp} value={f.currency} onChange={function(e){upd("currency",e.target.value);}}><option>USD</option><option>AUD</option></select></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Avg Price">
-            <Inp type="number" value={f.avgPrice} onChange={function(e) { upd("avgPrice", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Last Price">
-            <Inp type="number" value={f.lastPrice} onChange={function(e) { upd("lastPrice", +e.target.value); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Avg Price"><Inp type="number" value={f.avgPrice} onChange={function(e){upd("avgPrice",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Last Price"><Inp type="number" value={f.lastPrice} onChange={function(e){upd("lastPrice",+e.target.value);}} /></Field></div>
       </div>
-      <Btn style={{ width:"100%", marginTop:8 }} onClick={function() { if (f.ticker) props.onSave(f); }}>Add Position</Btn>
+      <Btn style={{width:"100%",marginTop:8}} onClick={function(){if(f.ticker)props.onSave(f);}}>Add Position</Btn>
     </div>
   );
 }
 
 function OptionModal(props) {
-  var [f, setF] = useState({ ticker:"", side:"short", type:"put", strike:"", expiry:"", premium:"", qty:1, currency:"USD" });
-  function upd(k, v) { setF(function(p) { return Object.assign({}, p, { [k]:v }); }); }
+  var [f,setF]=useState({ticker:"",side:"short",type:"put",strike:"",expiry:"",premium:"",qty:1,currency:"USD"});
+  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
   return (
     <div>
       <ModalHeader title="Add Option Position" onClose={props.onClose} />
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Ticker">
-            <Inp value={f.ticker} onChange={function(e) { upd("ticker", e.target.value.toUpperCase()); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Side">
-            <select style={STYLES.inp} value={f.side} onChange={function(e) { upd("side", e.target.value); }}>
-              <option>short</option><option>long</option>
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Type">
-            <select style={STYLES.inp} value={f.type} onChange={function(e) { upd("type", e.target.value); }}>
-              <option>put</option><option>call</option>
-            </select>
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Ticker"><Inp value={f.ticker} onChange={function(e){upd("ticker",e.target.value.toUpperCase());}} /></Field></div>
+        <div style={{flex:1}}><Field label="Side"><select style={S.inp} value={f.side} onChange={function(e){upd("side",e.target.value);}}><option>short</option><option>long</option></select></Field></div>
+        <div style={{flex:1}}><Field label="Type"><select style={S.inp} value={f.type} onChange={function(e){upd("type",e.target.value);}}><option>put</option><option>call</option></select></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Strike">
-            <Inp type="number" value={f.strike} onChange={function(e) { upd("strike", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Qty">
-            <Inp type="number" value={f.qty} onChange={function(e) { upd("qty", +e.target.value); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Strike"><Inp type="number" value={f.strike} onChange={function(e){upd("strike",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Qty"><Inp type="number" value={f.qty} onChange={function(e){upd("qty",+e.target.value);}} /></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Expiry">
-            <Inp type="date" value={f.expiry} onChange={function(e) { upd("expiry", e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Premium">
-            <Inp type="number" value={f.premium} onChange={function(e) { upd("premium", +e.target.value); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Expiry"><Inp type="date" value={f.expiry} onChange={function(e){upd("expiry",e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Premium"><Inp type="number" value={f.premium} onChange={function(e){upd("premium",+e.target.value);}} /></Field></div>
       </div>
-      <Btn style={{ width:"100%", marginTop:8 }} onClick={function() { if (f.ticker) props.onSave(f); }}>Add Option</Btn>
+      <Btn style={{width:"100%",marginTop:8}} onClick={function(){if(f.ticker)props.onSave(f);}}>Add Option</Btn>
     </div>
   );
 }
 
 function SpreadModal(props) {
-  var [f, setF] = useState({ ticker:"", strategy:"Bull Put Spread", shortStrike:"", longStrike:"", expiry:"", credit:"", qty:1, currency:"USD", notes:"", openDate:new Date().toISOString().slice(0,10) });
-  function upd(k, v) { setF(function(p) { return Object.assign({}, p, { [k]:v }); }); }
-  var width = f.shortStrike && f.longStrike ? Math.abs(f.shortStrike - f.longStrike) : 0;
-  var ror = width && f.credit ? ((+f.credit / width) * 100).toFixed(1) : null;
-  var maxProfit = f.credit && f.qty ? (+f.credit * +f.qty * 100).toFixed(0) : null;
-  var maxLoss = width && f.credit && f.qty ? ((width - +f.credit) * +f.qty * 100).toFixed(0) : null;
+  var [f,setF]=useState({ticker:"",strategy:"Bull Put Spread",shortStrike:"",longStrike:"",expiry:"",credit:"",currentMark:"",qty:1,currency:"USD",notes:"",openDate:new Date().toISOString().slice(0,10)});
+  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
+  var width=f.shortStrike&&f.longStrike?parseFloat(Math.abs(+f.shortStrike-+f.longStrike).toFixed(2)):0;
+  var maxP=f.credit&&f.qty?(+f.credit*+f.qty*100).toFixed(0):null;
+  var maxL=width&&f.credit&&f.qty?((width-+f.credit)*+f.qty*100).toFixed(0):null;
+  var ror=width&&f.credit?((+f.credit/width)*100).toFixed(1):null;
   return (
     <div>
       <ModalHeader title="Add Spread Position" onClose={props.onClose} />
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Ticker">
-            <Inp value={f.ticker} onChange={function(e) { upd("ticker", e.target.value.toUpperCase()); }} />
-          </Field>
-        </div>
-        <div style={{ flex:2 }}>
-          <Field label="Strategy">
-            <select style={STYLES.inp} value={f.strategy} onChange={function(e) { upd("strategy", e.target.value); }}>
-              <option>Bull Put Spread</option>
-              <option>Bear Call Spread</option>
-              <option>Iron Condor</option>
-              <option>Debit Spread</option>
-            </select>
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Ticker"><Inp value={f.ticker} onChange={function(e){upd("ticker",e.target.value.toUpperCase());}} /></Field></div>
+        <div style={{flex:2}}><Field label="Strategy"><select style={S.inp} value={f.strategy} onChange={function(e){upd("strategy",e.target.value);}}><option>Bull Put Spread</option><option>Bear Call Spread</option><option>Iron Condor</option><option>Debit Spread</option></select></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Short Strike">
-            <Inp type="number" value={f.shortStrike} onChange={function(e) { upd("shortStrike", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Long Strike">
-            <Inp type="number" value={f.longStrike} onChange={function(e) { upd("longStrike", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Width">
-            <Inp value={width || ""} onChange={function(){}} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Short Strike"><Inp type="number" value={f.shortStrike} onChange={function(e){upd("shortStrike",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Long Strike"><Inp type="number" value={f.longStrike} onChange={function(e){upd("longStrike",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Width"><div style={Object.assign({},S.inp,{color:C.textDim,cursor:"default"})}>{width||""}</div></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Credit">
-            <Inp type="number" value={f.credit} onChange={function(e) { upd("credit", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Qty">
-            <Inp type="number" value={f.qty} onChange={function(e) { upd("qty", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Expiry">
-            <Inp type="date" value={f.expiry} onChange={function(e) { upd("expiry", e.target.value); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Credit"><Inp type="number" value={f.credit} onChange={function(e){upd("credit",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Current Mark"><Inp type="number" value={f.currentMark} onChange={function(e){upd("currentMark",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Qty"><Inp type="number" value={f.qty} onChange={function(e){upd("qty",+e.target.value);}} /></Field></div>
       </div>
-      {width > 0 && f.credit > 0 && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, padding:12, background:"rgba(0,212,170,0.05)", border:"1px solid rgba(0,212,170,0.15)", borderRadius:3, marginBottom:12 }}>
-          <div><Lbl>Max Profit</Lbl><div style={{ color:"#00d4aa", fontSize:12 }}>+${maxProfit}</div></div>
-          <div><Lbl>Max Loss</Lbl><div style={{ color:"#ff4444", fontSize:12 }}>-${maxLoss}</div></div>
-          <div><Lbl>RoR</Lbl><div style={{ color:"#ffaa00", fontSize:12 }}>{ror}%</div></div>
+      <Field label="Expiry"><Inp type="date" value={f.expiry} onChange={function(e){upd("expiry",e.target.value);}} /></Field>
+      {width>0&&f.credit>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:12,background:C.greenDim,border:"1px solid rgba(6,214,160,0.15)",borderRadius:4,marginBottom:12}}>
+          <div><div style={S.lbl}>Max Profit</div><div style={{fontSize:12,color:C.green}}>+${maxP}</div></div>
+          <div><div style={S.lbl}>Max Loss</div><div style={{fontSize:12,color:C.red}}>-${maxL}</div></div>
+          <div><div style={S.lbl}>RoR</div><div style={{fontSize:12,color:C.yellow}}>{ror}%</div></div>
         </div>
       )}
-      <Field label="Notes">
-        <textarea style={Object.assign({}, STYLES.inp, { resize:"vertical" })} rows={3} value={f.notes} onChange={function(e) { upd("notes", e.target.value); }} />
-      </Field>
-      <Btn style={{ width:"100%", marginTop:4 }} onClick={function() { if (f.ticker && f.expiry) props.onSave(Object.assign({}, f, { width:width })); }}>Add Spread</Btn>
+      <Field label="Notes"><textarea style={Object.assign({},S.inp,{resize:"vertical"})} rows={2} value={f.notes} onChange={function(e){upd("notes",e.target.value);}} /></Field>
+      <Btn style={{width:"100%",marginTop:4}} onClick={function(){if(f.ticker&&f.expiry)props.onSave(Object.assign({},f,{width:width}));}}>Add Spread</Btn>
     </div>
   );
 }
 
 function JournalModal(props) {
-  var [f, setF] = useState({ date:new Date().toISOString().slice(0,10), ticker:"", action:"SELL PUT", price:"", qty:"", pnl:"", currency:"USD", notes:"", tagInput:"", tags:[] });
-  function upd(k, v) { setF(function(p) { return Object.assign({}, p, { [k]:v }); }); }
-  function addTag() {
-    if (f.tagInput.trim()) {
-      setF(function(p) { return Object.assign({}, p, { tags:[].concat(p.tags, [p.tagInput.trim().toLowerCase()]), tagInput:"" }); });
-    }
-  }
+  var [f,setF]=useState({date:new Date().toISOString().slice(0,10),ticker:"",action:"SELL PUT",price:"",qty:"",pnl:"",currency:"USD",notes:"",tagInput:"",tags:[]});
+  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
+  function addTag(){if(f.tagInput.trim()){setF(function(p){return Object.assign({},p,{tags:[].concat(p.tags,[p.tagInput.trim().toLowerCase()]),tagInput:""});});}}
   return (
     <div>
       <ModalHeader title="Add Journal Entry" onClose={props.onClose} />
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Date">
-            <Inp type="date" value={f.date} onChange={function(e) { upd("date", e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Ticker">
-            <Inp value={f.ticker} onChange={function(e) { upd("ticker", e.target.value.toUpperCase()); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Date"><Inp type="date" value={f.date} onChange={function(e){upd("date",e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Ticker"><Inp value={f.ticker} onChange={function(e){upd("ticker",e.target.value.toUpperCase());}} /></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:2 }}>
-          <Field label="Action">
-            <select style={STYLES.inp} value={f.action} onChange={function(e) { upd("action", e.target.value); }}>
-              <option>SELL PUT</option>
-              <option>SELL CALL</option>
-              <option>BUY STOCK</option>
-              <option>SELL STOCK</option>
-              <option>SELL SPREAD</option>
-              <option>CLOSE SPREAD</option>
-              <option>ROLL OPTION</option>
-              <option>ASSIGNMENT</option>
-              <option>EXPIRY</option>
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Currency">
-            <select style={STYLES.inp} value={f.currency} onChange={function(e) { upd("currency", e.target.value); }}>
-              <option>USD</option>
-              <option>AUD</option>
-            </select>
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:2}}><Field label="Action"><select style={S.inp} value={f.action} onChange={function(e){upd("action",e.target.value);}}><option>SELL PUT</option><option>SELL CALL</option><option>BUY STOCK</option><option>SELL STOCK</option><option>SELL SPREAD</option><option>CLOSE SPREAD</option><option>ROLL OPTION</option><option>ASSIGNMENT</option><option>EXPIRY</option></select></Field></div>
+        <div style={{flex:1}}><Field label="Currency"><select style={S.inp} value={f.currency} onChange={function(e){upd("currency",e.target.value);}}><option>USD</option><option>AUD</option></select></Field></div>
       </div>
-      <div style={{ display:"flex", gap:10 }}>
-        <div style={{ flex:1 }}>
-          <Field label="Price">
-            <Inp type="number" value={f.price} onChange={function(e) { upd("price", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="Qty">
-            <Inp type="number" value={f.qty} onChange={function(e) { upd("qty", +e.target.value); }} />
-          </Field>
-        </div>
-        <div style={{ flex:1 }}>
-          <Field label="PnL">
-            <Inp type="number" value={f.pnl} onChange={function(e) { upd("pnl", +e.target.value); }} />
-          </Field>
-        </div>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Price"><Inp type="number" value={f.price} onChange={function(e){upd("price",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="Qty"><Inp type="number" value={f.qty} onChange={function(e){upd("qty",+e.target.value);}} /></Field></div>
+        <div style={{flex:1}}><Field label="PnL"><Inp type="number" value={f.pnl} onChange={function(e){upd("pnl",+e.target.value);}} /></Field></div>
       </div>
-      <Field label="Notes">
-        <textarea style={Object.assign({}, STYLES.inp, { resize:"vertical" })} rows={3} value={f.notes} onChange={function(e) { upd("notes", e.target.value); }} />
-      </Field>
+      <Field label="Notes"><textarea style={Object.assign({},S.inp,{resize:"vertical"})} rows={2} value={f.notes} onChange={function(e){upd("notes",e.target.value);}} /></Field>
       <Field label="Tags">
-        <div style={{ marginBottom:6 }}>
-          {f.tags.map(function(t, i) {
-            return (
-              <span key={i} style={STYLES.tag}>
-                {t}
-                <span style={{ cursor:"pointer", marginLeft:3 }} onClick={function() {
-                  setF(function(p) { return Object.assign({}, p, { tags:p.tags.filter(function(_,j) { return j !== i; }) }); });
-                }}>x</span>
-              </span>
-            );
-          })}
-        </div>
-        <div style={{ display:"flex", gap:6 }}>
-          <Inp placeholder="e.g. premium, roll" value={f.tagInput} onChange={function(e) { upd("tagInput", e.target.value); }} />
-          <Btn onClick={addTag}>Add</Btn>
-        </div>
+        <div style={{marginBottom:6}}>{f.tags.map(function(t,i){return(<span key={i} style={S.tag}>{t}<span style={{cursor:"pointer",marginLeft:3}} onClick={function(){setF(function(p){return Object.assign({},p,{tags:p.tags.filter(function(_,j){return j!==i;})});});}}>x</span></span>);})}</div>
+        <div style={{display:"flex",gap:6}}><Inp placeholder="add tag" value={f.tagInput} onChange={function(e){upd("tagInput",e.target.value);}} /><Btn onClick={addTag}>Add</Btn></div>
       </Field>
-      <Btn style={{ width:"100%", marginTop:4 }} onClick={function() { if (f.ticker) props.onSave(f); }}>Save Entry</Btn>
+      <Btn style={{width:"100%",marginTop:4}} onClick={function(){if(f.ticker)props.onSave(f);}}>Save Entry</Btn>
     </div>
   );
 }
 
 function IncomeModal(props) {
-  var [f, setF] = useState({ month:"", label:"", premium:"" });
-  function upd(k, v) { setF(function(p) { return Object.assign({}, p, { [k]:v }); }); }
+  var [f,setF]=useState({month:"",label:"",premium:""});
+  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
   return (
     <div>
       <ModalHeader title="Add Income Month" onClose={props.onClose} />
-      <Field label="Month (YYYY-MM)">
-        <Inp type="month" value={f.month} onChange={function(e) {
-          var d = new Date(e.target.value + "-01");
-          upd("month", e.target.value);
-          upd("label", d.toLocaleString("default", { month:"short", year:"2-digit" }));
-        }} />
-      </Field>
-      <Field label="Premium Collected (USD)">
-        <Inp type="number" value={f.premium} onChange={function(e) { upd("premium", +e.target.value); }} />
-      </Field>
-      <Btn style={{ width:"100%", marginTop:8 }} onClick={function() { if (f.month && f.premium) props.onSave(f); }}>Add Month</Btn>
+      <Field label="Month (YYYY-MM)"><Inp type="month" value={f.month} onChange={function(e){var d=new Date(e.target.value+"-01");upd("month",e.target.value);upd("label",d.toLocaleString("default",{month:"short",year:"2-digit"}));}} /></Field>
+      <Field label="Premium Collected (USD)"><Inp type="number" value={f.premium} onChange={function(e){upd("premium",+e.target.value);}} /></Field>
+      <Btn style={{width:"100%",marginTop:8}} onClick={function(){if(f.month&&f.premium)props.onSave(f);}}>Add Month</Btn>
     </div>
   );
 }
 
-export default function App() {
-  var [nlv, setNlv] = usePersistedState("pt_nlv", 182069);
-  var [stocks, setStocks] = usePersistedState("pt_stocks", SEED_STOCKS);
-  var [options, setOptions] = usePersistedState("pt_options", SEED_OPTIONS);
-  var [spreads, setSpreads] = usePersistedState("pt_spreads", SEED_SPREADS);
-  var [journal, setJournal] = usePersistedState("pt_journal", SEED_JOURNAL);
-  var [income, setIncome] = usePersistedState("pt_income", SEED_INCOME);
-  var [tab, setTab] = useState("overview");
-  var [modal, setModal] = useState(null);
-  var [importMsg, setImportMsg] = useState("");
-  var [showReset, setShowReset] = useState(false);
-  var fileRef = useRef();
-
-  var stockPL = stocks.reduce(function(s, p) { return s + toUSD((p.lastPrice - p.avgPrice) * p.shares, p.currency); }, 0);
-  var totalIncome = income.reduce(function(s, m) { return s + m.premium; }, 0);
-  var avgIncome = income.length ? Math.round(totalIncome / income.length) : 0;
-  var progress = Math.min((nlv / GOAL) * 100, 100);
-  var remaining = GOAL - nlv;
-
-  var handleFile = useCallback(function(e) {
-    var file = e.target.files && e.target.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      try {
-        var result = parseIBKRcsv(ev.target.result);
-        if (result.stocks.length) {
-          setStocks(result.stocks);
-        }
-        if (result.options.length) {
-          setOptions(result.options);
-        }
-        if (result.spreads.length) {
-          setSpreads(result.spreads);
-        }
-        if (result.trades.length) {
-          setJournal(function(prev) {
-            var existingDates = new Set(prev.filter(function(j) { return j.tags && j.tags.indexOf("imported") !== -1; }).map(function(j) { return j.date + j.ticker; }));
-            var newTrades = result.trades.filter(function(t) { return !existingDates.has(t.date + t.ticker); });
-            return newTrades.concat(prev);
-          });
-        }
-        setImportMsg("Imported: " + result.stocks.length + " stocks, " + result.options.length + " options, " + result.spreads.length + " spreads, " + result.trades.length + " trades.");
-      } catch(err) {
-        setImportMsg("Could not parse file. Error: " + err.message);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  }, [setStocks, setJournal]);
-
-  var tabs = ["overview", "positions", "options", "spreads", "income", "journal", "import"];
-
-  function closeModal() { setModal(null); }
+function SpreadCard(props) {
+  var sp=props.sp;
+  var dte=getDTE(sp.expiry);
+  var maxProfit=sp.credit*sp.qty*100;
+  var maxLoss=(sp.width-sp.credit)*sp.qty*100;
+  var breakEven=sp.shortStrike-sp.credit;
+  var ror=sp.width>0?((sp.credit/sp.width)*100).toFixed(1):"0";
+  var hasMark=sp.currentMark!==undefined&&sp.currentMark!==null;
+  var currentPnl=hasMark?(sp.credit-sp.currentMark)*sp.qty*100:null;
+  var pctOfMax=hasMark&&maxProfit>0?(currentPnl/maxProfit)*100:null;
+  var premDecay=hasMark&&sp.credit>0?((sp.credit-sp.currentMark)/sp.credit)*100:null;
+  var statusLabel="", statusColor=C.textDim;
+  if(pctOfMax!==null){
+    if(pctOfMax>=75){statusLabel="Close to target";statusColor=C.green;}
+    else if(pctOfMax>=50){statusLabel="On track";statusColor=C.green;}
+    else if(pctOfMax>=25){statusLabel="Progressing";statusColor=C.yellow;}
+    else if(currentPnl<0){statusLabel="Losing";statusColor=C.red;}
+    else{statusLabel="Early days";statusColor=C.blue;}
+  }
+  var pnlColor=currentPnl===null?C.textMid:currentPnl>0?C.green:currentPnl<0?C.red:C.textMid;
+  var barGrad=pctOfMax>=50?"linear-gradient(90deg,"+C.green+","+C.blue+")":pctOfMax>=0?"linear-gradient(90deg,"+C.yellow+","+C.green+")":C.red;
 
   return (
-    <div style={STYLES.app}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Bebas+Neue&display=swap');
-        * { box-sizing: border-box; }
-        select option { background: #0d1420; }
-      `}</style>
+    <Card>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={Object.assign({},S.ticker,{fontSize:15})}>{sp.ticker}</span>
+          <span style={{fontSize:11,color:C.textMid,background:"rgba(255,255,255,0.06)",padding:"2px 8px",borderRadius:3}}>{sp.strategy}</span>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <DtePill dte={dte} />
+          <BtnRed onClick={props.onDelete}>x</BtnRed>
+        </div>
+      </div>
 
-      <div style={{ borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"20px 20px 0" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16, flexWrap:"wrap", gap:12 }}>
-          <div>
-            <div style={{ fontSize:9, letterSpacing:"0.2em", color:"#2d3748", marginBottom:4 }}>PORTFOLIO TERMINAL v2</div>
-            <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:28, letterSpacing:"0.08em", color:"#fff" }}>TRADING DESK</div>
-            <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:4 }}>
-              <div style={{ fontSize:9, color:"#4a5568" }}>AUD/USD {AUD_USD}</div>
-              <div style={{ fontSize:9, color:"#00d4aa", letterSpacing:"0.05em" }}>* AUTO-SAVED</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+        {[
+          {label:"Short Strike",val:"$"+sp.shortStrike},
+          {label:"Long Strike", val:"$"+sp.longStrike},
+          {label:"Width",       val:"$"+parseFloat(sp.width).toFixed(2)},
+          {label:"Credit",      val:fmtPlain(sp.credit),color:C.green},
+          {label:"Qty",         val:sp.qty},
+          {label:"Expiry",      val:sp.expiry.slice(5)},
+        ].map(function(m,i){
+          return (
+            <div key={i}>
+              <div style={S.lbl}>{m.label}</div>
+              <div style={{fontSize:13,color:m.color||C.text,fontWeight:m.color?"600":"400"}}>{m.val}</div>
             </div>
+          );
+        })}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"12px 0",borderTop:"1px solid "+C.border,borderBottom:hasMark?"1px solid "+C.border:"none",marginBottom:hasMark?16:0}}>
+        <div><div style={S.lbl}>Max Profit</div><div style={{fontSize:12,color:C.green,fontWeight:600}}>+${maxProfit.toFixed(0)}</div></div>
+        <div><div style={S.lbl}>Max Loss</div><div style={{fontSize:12,color:C.red,fontWeight:600}}>-${maxLoss.toFixed(0)}</div></div>
+        <div><div style={S.lbl}>Break Even</div><div style={{fontSize:12}}>${breakEven.toFixed(2)}</div></div>
+        <div><div style={S.lbl}>RoR</div><div style={{fontSize:12,color:C.yellow,fontWeight:600}}>{ror}%</div></div>
+      </div>
+
+      {hasMark&&(
+        <div style={{background:"rgba(6,214,160,0.05)",border:"1px solid rgba(6,214,160,0.15)",borderRadius:4,padding:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Current Performance</div>
+            <div style={{fontSize:11,color:statusColor,fontWeight:600,letterSpacing:"0.05em"}}>{statusLabel}</div>
           </div>
-          <div style={{ textAlign:"right" }}>
-            <div style={STYLES.lbl}>NET LIQ VALUE</div>
-            <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:48, letterSpacing:"0.05em", color:"#fff", lineHeight:1 }}>${nlv.toLocaleString()}</div>
-            <div style={{ fontSize:10, color: stockPL >= 0 ? "#00d4aa" : "#ff4444", marginTop:2 }}>
-              {fmtMoney(stockPL)} stock PnL
-            </div>
-            <button style={Object.assign({}, STYLES.btn, { marginTop:6, fontSize:9, padding:"3px 8px" })} onClick={function() { setModal("nlv"); }}>Update NLV</button>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+            <div><div style={S.lbl}>Current Mark</div><div style={{fontSize:13,color:C.textMid}}>${sp.currentMark.toFixed(2)}</div></div>
+            <div><div style={S.lbl}>PnL</div><div style={{fontSize:13,color:pnlColor,fontWeight:600}}>{currentPnl>=0?"+":""}{currentPnl!==null?currentPnl.toFixed(0):"na"}</div></div>
+            <div><div style={S.lbl}>% of Max</div><div style={{fontSize:13,color:pnlColor,fontWeight:600}}>{pctOfMax!==null?pctOfMax.toFixed(1):"na"}%</div></div>
+            <div><div style={S.lbl}>Premium Decay</div><div style={{fontSize:13,color:pnlColor}}>{premDecay!==null?premDecay.toFixed(1):"na"}%</div></div>
+          </div>
+          <BarFill pct={pctOfMax||0} gradient={barGrad} />
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:C.textFaint,marginTop:4}}>
+            <span>$0</span>
+            <span>50% = ${(maxProfit*0.5).toFixed(0)}</span>
+            <span>Max +${maxProfit.toFixed(0)}</span>
           </div>
         </div>
-        <div style={{ display:"flex", overflowX:"auto", gap:0 }}>
-          {tabs.map(function(t) {
-            var isActive = tab === t;
+      )}
+
+      {sp.notes&&<div style={{fontSize:10,color:C.textDim,fontStyle:"italic",marginTop:hasMark?10:0,paddingTop:hasMark?0:10}}>{sp.notes}</div>}
+    </Card>
+  );
+}
+
+export default function App() {
+  var [nlv,setNlv]=usePersistedState("pt_nlv",182069);
+  var [stocks,setStocks]=usePersistedState("pt_stocks",SEED_STOCKS);
+  var [options,setOptions]=usePersistedState("pt_options",SEED_OPTIONS);
+  var [spreads,setSpreads]=usePersistedState("pt_spreads",SEED_SPREADS);
+  var [journal,setJournal]=usePersistedState("pt_journal",SEED_JOURNAL);
+  var [income,setIncome]=usePersistedState("pt_income",SEED_INCOME);
+  var [tab,setTab]=useState("overview");
+  var [modal,setModal]=useState(null);
+  var [importMsg,setImportMsg]=useState("");
+  var [showReset,setShowReset]=useState(false);
+  var fileRef=useRef();
+
+  var stockPL=stocks.reduce(function(s,p){return s+toUSD((p.lastPrice-p.avgPrice)*p.shares,p.currency);},0);
+  var totalIncome=income.reduce(function(s,m){return s+m.premium;},0);
+  var avgIncome=income.length?Math.round(totalIncome/income.length):0;
+  var monthlyYield=nlv>0?((avgIncome/nlv)*100).toFixed(2):"0";
+  var annualYield=nlv>0?((avgIncome*12/nlv)*100).toFixed(2):"0";
+  var progress=Math.min((nlv/GOAL)*100,100);
+  var remaining=GOAL-nlv;
+
+  var handleFile=useCallback(function(e){
+    var file=e.target.files&&e.target.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var r=parseIBKRcsv(ev.target.result);
+        if(r.stocks.length) setStocks(r.stocks);
+        if(r.options.length) setOptions(r.options);
+        if(r.spreads.length) setSpreads(r.spreads);
+        if(r.trades.length){
+          setJournal(function(prev){
+            var ex=new Set(prev.filter(function(j){return j.tags&&j.tags.indexOf("imported")!==-1;}).map(function(j){return j.date+j.ticker;}));
+            return r.trades.filter(function(t){return !ex.has(t.date+t.ticker);}).concat(prev);
+          });
+        }
+        setImportMsg("Imported: "+r.stocks.length+" stocks, "+r.options.length+" options, "+r.spreads.length+" spreads, "+r.trades.length+" trades.");
+      }catch(err){setImportMsg("Error: "+err.message);}
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  },[setStocks,setOptions,setSpreads,setJournal]);
+
+  var tabs=["overview","positions","options","spreads","income","journal","import"];
+  function closeModal(){setModal(null);}
+  function delSpread(id){setSpreads(function(p){return p.filter(function(x){return x.id!==id;});});}
+  function delOption(id){setOptions(function(p){return p.filter(function(x){return x.id!==id;});});}
+  function delStock(id){setStocks(function(p){return p.filter(function(x){return x.id!==id;});});}
+  function delJournal(id){setJournal(function(p){return p.filter(function(x){return x.id!==id;});});}
+
+  return (
+    <div style={S.app}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Bebas+Neue&display=swap');*{box-sizing:border-box;}select option{background:#0d1420;}`}</style>
+
+      <div style={{borderBottom:"1px solid "+C.border,padding:"24px 24px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
+          <div>
+            <div style={{fontSize:9,letterSpacing:"0.2em",color:C.textFaint,marginBottom:4}}>PORTFOLIO TERMINAL v2</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:"0.08em",color:C.text}}>TRADING DESK</div>
+            <div style={{display:"flex",gap:10,alignItems:"center",marginTop:4}}>
+              <div style={{fontSize:9,color:C.textDim}}>AUD/USD {AUD_USD}</div>
+              <div style={{fontSize:9,color:C.green,letterSpacing:"0.05em"}}>* AUTO-SAVED</div>
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:4}}>NET LIQ VALUE</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:52,letterSpacing:"0.05em",color:C.text,lineHeight:1}}>${nlv.toLocaleString()}</div>
+            <div style={{fontSize:11,color:stockPL>=0?C.green:C.red,marginTop:2}}>{fmtSign(stockPL)} stock PnL</div>
+            <button style={Object.assign({},S.btn,{marginTop:8,fontSize:9,padding:"3px 10px"})} onClick={function(){setModal("nlv");}}>Update NLV</button>
+          </div>
+        </div>
+        <div style={{display:"flex",overflowX:"auto",gap:0}}>
+          {tabs.map(function(t){
+            var active=tab===t;
             return (
-              <button key={t} onClick={function() { setTab(t); }} style={{ background:"none", border:"none", borderBottom: isActive ? "2px solid #00d4aa" : "2px solid transparent", cursor:"pointer", fontFamily:"'IBM Plex Mono', monospace", fontSize:10, letterSpacing:"0.15em", textTransform:"uppercase", padding:"8px 14px", color: isActive ? "#00d4aa" : "#8a9ab5", whiteSpace:"nowrap" }}>
+              <button key={t} onClick={function(){setTab(t);}} style={{background:"none",border:"none",borderBottom:active?"2px solid "+C.green:"2px solid transparent",cursor:"pointer",fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",padding:"10px 16px",color:active?C.green:C.textMid,whiteSpace:"nowrap",transition:"color 0.2s"}}>
                 {t}
               </button>
             );
@@ -749,76 +503,66 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ padding:"16px 20px" }}>
+      <div style={{padding:"20px 24px"}}>
 
-        {tab === "overview" && (
+        {tab==="overview"&&(
           <div>
             <Card>
-              <div style={STYLES.sectionTitle}>Goal Progress to $250,000</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10, alignItems:"flex-end" }}>
-                <div>
-                  <div style={STYLES.lbl}>Current</div>
-                  <div style={Object.assign({}, STYLES.metricVal, { color:"#00d4aa" })}>${nlv.toLocaleString()}</div>
-                </div>
-                <div style={{ textAlign:"center" }}>
-                  <div style={STYLES.lbl}>Progress</div>
-                  <div style={Object.assign({}, STYLES.metricVal, { fontSize:20 })}>{progress.toFixed(1)}%</div>
-                </div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={STYLES.lbl}>Remaining</div>
-                  <div style={Object.assign({}, STYLES.metricVal, { fontSize:20, color:"#6b7fa3" })}>${remaining.toLocaleString()}</div>
-                </div>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:12}}>Goal Progress to $250,000</div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"flex-end"}}>
+                <div><div style={S.lbl}>Current</div><div style={Object.assign({},S.big,{color:C.green,fontSize:32})}>${nlv.toLocaleString()}</div></div>
+                <div style={{textAlign:"center"}}><div style={S.lbl}>Progress</div><div style={Object.assign({},S.big,{fontSize:22})}>{progress.toFixed(1)}%</div></div>
+                <div style={{textAlign:"right"}}><div style={S.lbl}>Remaining</div><div style={Object.assign({},S.big,{fontSize:22,color:C.textDim})}>${remaining.toLocaleString()}</div></div>
               </div>
-              <ProgressBar pct={progress} />
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"#2d3748" }}>
-                <span>$0</span>
-                <span style={{ color:"#00d4aa" }}>${remaining.toLocaleString()} to go</span>
-                <span>$250k</span>
+              <BarFill pct={progress} />
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:9,color:C.textFaint}}>
+                <span>$0</span><span style={{color:C.green}}>${remaining.toLocaleString()} to go</span><span>$250k</span>
               </div>
             </Card>
 
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-              {[
-                { label:"Premium YTD",  val:"$"+totalIncome.toLocaleString(), color:"#00d4aa" },
-                { label:"Avg / Month",  val:"$"+avgIncome.toLocaleString(),   color:"#00a8ff" },
-                { label:"Open Options", val:options.length,                    color:"#e2e8f0" },
-                { label:"Open Spreads", val:spreads.length,                    color:"#e2e8f0" },
-              ].map(function(m, i) {
-                return (
-                  <Card key={i}>
-                    <div style={STYLES.lbl}>{m.label}</div>
-                    <div style={Object.assign({}, STYLES.metricVal, { color:m.color, fontSize:22 })}>{m.val}</div>
-                  </Card>
-                );
-              })}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
+              <Card><div style={S.lbl}>Premium YTD</div><div style={Object.assign({},S.big,{color:C.green,fontSize:24})}>${totalIncome.toLocaleString()}</div></Card>
+              <Card>
+                <div style={S.lbl}>Monthly Yield</div>
+                <div style={Object.assign({},S.big,{color:C.blue,fontSize:24})}>{monthlyYield}%</div>
+                <div style={{fontSize:9,color:C.textDim,marginTop:2}}>${avgIncome}/mo on NLV</div>
+              </Card>
+              <Card>
+                <div style={S.lbl}>Annual Yield</div>
+                <div style={Object.assign({},S.big,{color:C.yellow,fontSize:24})}>{annualYield}%</div>
+                <div style={{fontSize:9,color:C.textDim,marginTop:2}}>${(avgIncome*12).toLocaleString()}/yr projected</div>
+              </Card>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
+              <Card><div style={S.lbl}>Avg / Month</div><div style={Object.assign({},S.big,{fontSize:22})}>${avgIncome.toLocaleString()}</div></Card>
+              <Card><div style={S.lbl}>Open Options</div><div style={Object.assign({},S.big,{fontSize:22})}>{options.length}</div></Card>
+              <Card><div style={S.lbl}>Open Spreads</div><div style={Object.assign({},S.big,{fontSize:22})}>{spreads.length}</div></Card>
             </div>
 
             <Card>
-              <div style={STYLES.sectionTitle}>Income Replacement Target $8,000/mo</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8, fontSize:11 }}>
-                <span style={{ color:"#a0aec0" }}>Current avg</span>
-                <span style={{ color:"#00d4aa" }}>${avgIncome}/mo</span>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:8}}>Income Replacement Target $8,000/mo</div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:11}}>
+                <span style={{color:C.textMid}}>Current avg</span><span style={{color:C.green}}>${avgIncome}/mo</span>
               </div>
-              <ProgressBar pct={Math.min((avgIncome/8000)*100, 100)} gradient="linear-gradient(90deg,#00a8ff,#00d4aa)" />
-              <div style={{ fontSize:9, color:"#4a5568", marginTop:5, textAlign:"right" }}>
-                {((avgIncome/8000)*100).toFixed(1)}% of target
-              </div>
+              <BarFill pct={Math.min((avgIncome/8000)*100,100)} gradient={"linear-gradient(90deg,"+C.blue+","+C.green+")"} />
+              <div style={{fontSize:9,color:C.textFaint,marginTop:5,textAlign:"right"}}>{((avgIncome/8000)*100).toFixed(1)}% of $8,000 target</div>
             </Card>
 
             <Card>
-              <div style={STYLES.sectionTitle}>Upcoming Expiries</div>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:12}}>Upcoming Expiries</div>
               {[].concat(
-                options.map(function(o) { return Object.assign({}, o, { dte:getDTE(o.expiry), label:"$"+o.strike+" "+o.type }); }),
-                spreads.map(function(s) { return Object.assign({}, s, { dte:getDTE(s.expiry), label:s.strategy }); })
-              ).sort(function(a,b) { return a.dte - b.dte; }).slice(0,6).map(function(o, i) {
+                options.map(function(o){return Object.assign({},o,{dte:getDTE(o.expiry),dispLabel:"$"+o.strike+" "+o.type});}),
+                spreads.map(function(s){return Object.assign({},s,{dte:getDTE(s.expiry),dispLabel:s.strategy});})
+              ).sort(function(a,b){return a.dte-b.dte;}).slice(0,6).map(function(o,i){
                 return (
-                  <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom: i < 5 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
-                    <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                      <span style={STYLES.ticker}>{o.ticker}</span>
-                      <span style={{ fontSize:10, color:"#6b7fa3" }}>{o.label}</span>
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<5?"1px solid "+C.border:"none"}}>
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <span style={S.ticker}>{o.ticker}</span>
+                      <span style={{fontSize:10,color:C.textDim}}>{o.dispLabel}</span>
                     </div>
-                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                      <span style={{ fontSize:9, color:"#4a5568" }}>{o.expiry}</span>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:9,color:C.textFaint}}>{o.expiry}</span>
                       <DtePill dte={o.dte} />
                     </div>
                   </div>
@@ -828,302 +572,204 @@ export default function App() {
           </div>
         )}
 
-        {tab === "positions" && (
+        {tab==="positions"&&(
           <Card>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <div style={STYLES.sectionTitle}>Stock Positions</div>
-              <Btn onClick={function() { setModal("stock"); }}>+ Add</Btn>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Stock Positions</div>
+              <Btn onClick={function(){setModal("stock");}}>+ Add</Btn>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"70px 60px 70px 70px 70px 36px", gap:6, fontSize:9, color:"#2d3748", paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{display:"grid",gridTemplateColumns:"80px 70px 80px 80px 80px 36px",gap:6,fontSize:9,color:C.textFaint,paddingBottom:8,borderBottom:"1px solid "+C.border}}>
               <span>Ticker</span><span>Shares</span><span>Avg</span><span>Last</span><span>PnL</span><span></span>
             </div>
-            {stocks.map(function(p) {
-              var pl = (p.lastPrice - p.avgPrice) * p.shares;
-              var prefix = p.currency === "AUD" ? "A$" : "$";
+            {stocks.map(function(p){
+              var pl=(p.lastPrice-p.avgPrice)*p.shares, px=p.currency==="AUD"?"A$":"$";
               return (
-                <div key={p.id} style={{ display:"grid", gridTemplateColumns:"70px 60px 70px 70px 70px 36px", gap:6, alignItems:"center", fontSize:11, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                  <span style={STYLES.ticker}>{p.ticker}</span>
-                  <span style={{ color:"#a0aec0" }}>{p.shares.toLocaleString()}</span>
-                  <span style={{ color:"#6b7fa3" }}>{prefix}{p.avgPrice.toFixed(2)}</span>
-                  <span>{prefix}{p.lastPrice.toFixed(2)}</span>
-                  <span style={{ color: pl >= 0 ? "#00d4aa" : "#ff4444", fontWeight:600 }}>{fmtMoney(pl, p.currency)}</span>
-                  <BtnRed onClick={function() { setStocks(function(prev) { return prev.filter(function(x) { return x.id !== p.id; }); }); }}>x</BtnRed>
+                <div key={p.id} style={{display:"grid",gridTemplateColumns:"80px 70px 80px 80px 80px 36px",gap:6,alignItems:"center",fontSize:11,padding:"10px 0",borderBottom:"1px solid "+C.border}}>
+                  <span style={S.ticker}>{p.ticker}</span>
+                  <span style={{color:C.textMid}}>{p.shares.toLocaleString()}</span>
+                  <span style={{color:C.textDim}}>{px}{p.avgPrice.toFixed(2)}</span>
+                  <span>{px}{p.lastPrice.toFixed(2)}</span>
+                  <span style={{color:pl>=0?C.green:C.red,fontWeight:600}}>{fmtSign(pl,p.currency)}</span>
+                  <BtnRed onClick={function(){delStock(p.id);}}>x</BtnRed>
                 </div>
               );
             })}
-            <div style={{ display:"grid", gridTemplateColumns:"70px 60px 70px 70px 70px 36px", gap:6, alignItems:"center", marginTop:10, paddingTop:10, borderTop:"1px solid rgba(255,255,255,0.08)", fontSize:11 }}>
-              <span style={{ fontSize:9, color:"#4a5568" }}>TOTAL</span>
-              <span /><span /><span />
-              <span style={{ color: stockPL >= 0 ? "#00d4aa" : "#ff4444", fontWeight:700 }}>{fmtMoney(stockPL)}</span>
-              <span />
+            <div style={{display:"grid",gridTemplateColumns:"80px 70px 80px 80px 80px 36px",gap:6,alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.1)",fontSize:11}}>
+              <span style={{fontSize:9,color:C.textFaint}}>TOTAL</span><span/><span/><span/>
+              <span style={{color:stockPL>=0?C.green:C.red,fontWeight:700}}>{fmtSign(stockPL)}</span><span/>
             </div>
           </Card>
         )}
 
-        {tab === "options" && (
+        {tab==="options"&&(
           <Card>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <div style={STYLES.sectionTitle}>Single-Leg Options</div>
-              <Btn onClick={function() { setModal("option"); }}>+ Add</Btn>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Single-Leg Options</div>
+              <Btn onClick={function(){setModal("option");}}>+ Add</Btn>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"60px 44px 50px 60px 50px 44px 36px", gap:6, fontSize:9, color:"#2d3748", paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{display:"grid",gridTemplateColumns:"70px 50px 50px 70px 60px 50px 36px",gap:6,fontSize:9,color:C.textFaint,paddingBottom:8,borderBottom:"1px solid "+C.border}}>
               <span>Ticker</span><span>Side</span><span>Type</span><span>Strike</span><span>Expiry</span><span>DTE</span><span></span>
             </div>
-            {[].concat(options).sort(function(a,b) { return getDTE(a.expiry) - getDTE(b.expiry); }).map(function(o) {
-              var dte = getDTE(o.expiry);
+            {[].concat(options).sort(function(a,b){return getDTE(a.expiry)-getDTE(b.expiry);}).map(function(o){
+              var dte=getDTE(o.expiry);
               return (
-                <div key={o.id} style={{ display:"grid", gridTemplateColumns:"60px 44px 50px 60px 50px 44px 36px", gap:6, alignItems:"center", fontSize:11, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
-                  <span style={STYLES.ticker}>{o.ticker}</span>
-                  <span style={{ color: o.side === "short" ? "#ff4444" : "#00a8ff", fontSize:10 }}>{o.side}</span>
-                  <span style={{ color: o.type === "call" ? "#ffaa00" : "#00a8ff", fontSize:10 }}>{o.type}</span>
+                <div key={o.id} style={{display:"grid",gridTemplateColumns:"70px 50px 50px 70px 60px 50px 36px",gap:6,alignItems:"center",fontSize:11,padding:"10px 0",borderBottom:"1px solid "+C.border}}>
+                  <span style={S.ticker}>{o.ticker}</span>
+                  <span style={{color:o.side==="short"?C.red:C.green,fontSize:10}}>{o.side}</span>
+                  <span style={{color:o.type==="call"?C.yellow:C.blue,fontSize:10}}>{o.type}</span>
                   <span>${o.strike}</span>
-                  <span style={{ fontSize:9, color:"#6b7fa3" }}>{o.expiry.slice(5)}</span>
+                  <span style={{fontSize:9,color:C.textDim}}>{o.expiry.slice(5)}</span>
                   <DtePill dte={dte} />
-                  <BtnRed onClick={function() { setOptions(function(prev) { return prev.filter(function(x) { return x.id !== o.id; }); }); }}>x</BtnRed>
+                  <BtnRed onClick={function(){delOption(o.id);}}>x</BtnRed>
                 </div>
               );
             })}
           </Card>
         )}
 
-        {tab === "spreads" && (
+        {tab==="spreads"&&(
           <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={STYLES.sectionTitle}>Spread Positions</div>
-              <Btn onClick={function() { setModal("spread"); }}>+ Add Spread</Btn>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Spread Positions</div>
+              <Btn onClick={function(){setModal("spread");}}>+ Add Spread</Btn>
             </div>
-            {spreads.length === 0 && (
-              <Card>
-                <div style={{ textAlign:"center", color:"#4a5568", fontSize:11, padding:32 }}>No spreads yet. Click + Add Spread to get started.</div>
-              </Card>
+            {spreads.length===0&&(
+              <Card><div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No spreads yet. Import your IBKR CSV or click + Add Spread.</div></Card>
             )}
-            {spreads.map(function(sp) {
-              var dte = getDTE(sp.expiry);
-              var maxProfit = sp.credit * sp.qty * 100;
-              var maxLoss = (sp.width - sp.credit) * sp.qty * 100;
-              var breakEven = sp.shortStrike - sp.credit;
-              var ror = ((sp.credit / sp.width) * 100).toFixed(1);
-              return (
-                <Card key={sp.id}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-                    <div>
-                      <span style={Object.assign({}, STYLES.ticker, { fontSize:13 })}>{sp.ticker}</span>
-                      <span style={{ fontSize:11, color:"#a0aec0", marginLeft:8 }}>{sp.strategy}</span>
-                    </div>
-                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                      <DtePill dte={dte} />
-                      <BtnRed onClick={function() { setSpreads(function(prev) { return prev.filter(function(x) { return x.id !== sp.id; }); }); }}>x</BtnRed>
-                    </div>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:12 }}>
-                    {[
-                      { label:"Short Strike", val:"$"+sp.shortStrike },
-                      { label:"Long Strike",  val:"$"+sp.longStrike },
-                      { label:"Width",        val:"$"+sp.width },
-                      { label:"Credit",       val:fmtPlain(sp.credit), color:"#00d4aa" },
-                      { label:"Qty",          val:sp.qty },
-                      { label:"Expiry",       val:sp.expiry.slice(5) },
-                    ].map(function(m, i) {
-                      return (
-                        <div key={i}>
-                          <div style={STYLES.lbl}>{m.label}</div>
-                          <div style={{ fontSize:12, color:m.color || "#e2e8f0" }}>{m.val}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, padding:"10px 0", borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                    <div><div style={STYLES.lbl}>Max Profit</div><div style={{ fontSize:12, color:"#00d4aa" }}>+${maxProfit.toFixed(0)}</div></div>
-                    <div><div style={STYLES.lbl}>Max Loss</div><div style={{ fontSize:12, color:"#ff4444" }}>-${maxLoss.toFixed(0)}</div></div>
-                    <div><div style={STYLES.lbl}>Break Even</div><div style={{ fontSize:12 }}>${breakEven.toFixed(2)}</div></div>
-                    <div><div style={STYLES.lbl}>RoR</div><div style={{ fontSize:12, color:"#ffaa00" }}>{ror}%</div></div>
-                  </div>
-                  {sp.notes && (
-                    <div style={{ marginTop:10, padding:"8px 10px", background:"rgba(255,255,255,0.03)", borderRadius:3, fontSize:10, color:"#6b7fa3", fontStyle:"italic" }}>
-                      {sp.notes}
-                    </div>
-                  )}
-                </Card>
-              );
+            {spreads.map(function(sp){
+              return <SpreadCard key={sp.id} sp={sp} onDelete={function(){delSpread(sp.id);}} />;
             })}
           </div>
         )}
 
-        {tab === "income" && (
+        {tab==="income"&&(
           <div>
             <Card>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                <div style={STYLES.sectionTitle}>Monthly Premium Income</div>
-                <Btn onClick={function() { setModal("income"); }}>+ Add Month</Btn>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Monthly Premium Income</div>
+                <Btn onClick={function(){setModal("income");}}>+ Add Month</Btn>
               </div>
-              {income.length > 0 && (function() {
-                var maxVal = Math.max.apply(null, income.map(function(m) { return m.premium; }));
+              {income.length>0&&(function(){
+                var maxVal=Math.max.apply(null,income.map(function(m){return m.premium;}));
                 return (
                   <div>
-                    <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:120, marginBottom:8 }}>
-                      {income.map(function(m, i) {
-                        var pct = (m.premium / maxVal) * 100;
-                        var isLast = i === income.length - 1;
+                    <div style={{display:"flex",alignItems:"flex-end",gap:8,height:130,marginBottom:10}}>
+                      {income.map(function(m,i){
+                        var pct=(m.premium/maxVal)*100, isLast=i===income.length-1;
                         return (
-                          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", height:"100%", justifyContent:"flex-end" }}>
-                            <div style={{ fontSize:9, color:"#00d4aa", marginBottom:3 }}>${m.premium}</div>
-                            <div style={{ width:"100%", height:pct+"%", background: isLast ? "linear-gradient(180deg,#00d4aa,rgba(0,168,255,0.27))" : "rgba(0,212,170,0.2)", border:"1px solid rgba(0,212,170,0.25)", borderRadius:"2px 2px 0 0" }} />
+                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
+                            <div style={{fontSize:9,color:C.green,marginBottom:4}}>${m.premium}</div>
+                            <div style={{width:"100%",height:pct+"%",background:isLast?"linear-gradient(180deg,"+C.green+",rgba(6,214,160,0.2))":"rgba(6,214,160,0.2)",border:"1px solid rgba(6,214,160,0.3)",borderRadius:"3px 3px 0 0"}} />
                           </div>
                         );
                       })}
                     </div>
-                    <div style={{ display:"flex", gap:8 }}>
-                      {income.map(function(m, i) {
-                        return <div key={i} style={{ flex:1, textAlign:"center", fontSize:8, color:"#4a5568" }}>{m.label}</div>;
-                      })}
-                    </div>
+                    <div style={{display:"flex",gap:8}}>{income.map(function(m,i){return <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:C.textFaint}}>{m.label}</div>;})}</div>
                   </div>
                 );
               })()}
             </Card>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-              <Card>
-                <div style={STYLES.lbl}>Total YTD</div>
-                <div style={Object.assign({}, STYLES.metricVal, { color:"#00d4aa", fontSize:24 })}>${totalIncome.toLocaleString()}</div>
-              </Card>
-              <Card>
-                <div style={STYLES.lbl}>Monthly Avg</div>
-                <div style={Object.assign({}, STYLES.metricVal, { fontSize:24 })}>${avgIncome.toLocaleString()}</div>
-              </Card>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
+              <Card><div style={S.lbl}>Total YTD</div><div style={Object.assign({},S.big,{color:C.green,fontSize:24})}>${totalIncome.toLocaleString()}</div></Card>
+              <Card><div style={S.lbl}>Monthly Avg</div><div style={Object.assign({},S.big,{fontSize:24})}>${avgIncome.toLocaleString()}</div></Card>
+              <Card><div style={S.lbl}>Annual Run Rate</div><div style={Object.assign({},S.big,{color:C.yellow,fontSize:24})}>${(avgIncome*12).toLocaleString()}</div></Card>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+              <Card><div style={S.lbl}>Monthly Yield on NLV</div><div style={Object.assign({},S.big,{color:C.blue,fontSize:24})}>{monthlyYield}%</div></Card>
+              <Card><div style={S.lbl}>Annual Yield on NLV</div><div style={Object.assign({},S.big,{color:C.yellow,fontSize:24})}>{annualYield}%</div></Card>
             </div>
             <Card>
-              <div style={STYLES.sectionTitle}>Path to $8,000/mo</div>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:8 }}>
-                <span style={{ color:"#a0aec0" }}>Current avg</span>
-                <span style={{ color:"#00d4aa" }}>${avgIncome}/mo</span>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:10}}>Path to $8,000/mo</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:8}}>
+                <span style={{color:C.textMid}}>Current avg</span><span style={{color:C.green}}>${avgIncome}/mo</span>
               </div>
-              <ProgressBar pct={Math.min((avgIncome/8000)*100, 100)} gradient="linear-gradient(90deg,#00a8ff,#00d4aa)" />
-              <div style={{ fontSize:9, color:"#4a5568", marginTop:5, textAlign:"right" }}>
-                {((avgIncome/8000)*100).toFixed(1)}% of $8,000 target
-              </div>
+              <BarFill pct={Math.min((avgIncome/8000)*100,100)} gradient={"linear-gradient(90deg,"+C.blue+","+C.green+")"} />
+              <div style={{fontSize:9,color:C.textFaint,marginTop:5,textAlign:"right"}}>{((avgIncome/8000)*100).toFixed(1)}% of $8,000 target</div>
             </Card>
           </div>
         )}
 
-        {tab === "journal" && (
+        {tab==="journal"&&(
           <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={STYLES.sectionTitle}>Trade Journal</div>
-              <Btn onClick={function() { setModal("journal"); }}>+ Add Entry</Btn>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Trade Journal</div>
+              <Btn onClick={function(){setModal("journal");}}>+ Add Entry</Btn>
             </div>
-            {journal.map(function(j) {
+            {journal.map(function(j){
               return (
                 <Card key={j.id}>
-                  <div style={{ position:"absolute", top:12, right:12 }}>
-                    <BtnRed onClick={function() { setJournal(function(prev) { return prev.filter(function(x) { return x.id !== j.id; }); }); }}>x</BtnRed>
+                  <div style={{position:"absolute",top:14,right:14}}><BtnRed onClick={function(){delJournal(j.id);}}>x</BtnRed></div>
+                  <div style={{display:"flex",gap:10,alignItems:"baseline",marginBottom:10,paddingRight:40}}>
+                    <span style={Object.assign({},S.ticker,{fontSize:14})}>{j.ticker}</span>
+                    <span style={{fontSize:10,color:C.textMid,background:"rgba(255,255,255,0.06)",padding:"2px 7px",borderRadius:3}}>{j.action}</span>
+                    <span style={{fontSize:9,color:C.textFaint,marginLeft:"auto"}}>{j.date}</span>
                   </div>
-                  <div style={{ display:"flex", gap:10, alignItems:"baseline", marginBottom:8, paddingRight:40 }}>
-                    <span style={Object.assign({}, STYLES.ticker, { fontSize:13 })}>{j.ticker}</span>
-                    <span style={{ fontSize:10, color:"#a0aec0" }}>{j.action}</span>
-                    <span style={{ fontSize:9, color:"#4a5568", marginLeft:"auto" }}>{j.date}</span>
+                  <div style={{display:"flex",gap:20,marginBottom:10,fontSize:11}}>
+                    <div><div style={S.lbl}>Price</div><span>{fmtPlain(j.price,j.currency)}</span></div>
+                    <div><div style={S.lbl}>Qty</div><span>{j.qty}</span></div>
+                    <div><div style={S.lbl}>PnL</div><span style={{color:j.pnl>=0?C.green:C.red,fontWeight:600}}>{fmtSign(j.pnl,j.currency)}</span></div>
                   </div>
-                  <div style={{ display:"flex", gap:16, marginBottom:10, fontSize:11 }}>
-                    <div><div style={STYLES.lbl}>Price</div><span>{fmtPlain(j.price, j.currency)}</span></div>
-                    <div><div style={STYLES.lbl}>Qty</div><span>{j.qty}</span></div>
-                    <div><div style={STYLES.lbl}>PnL</div><span style={{ color: j.pnl >= 0 ? "#00d4aa" : "#ff4444", fontWeight:600 }}>{fmtMoney(j.pnl, j.currency)}</span></div>
-                  </div>
-                  {j.notes && <div style={{ fontSize:10, color:"#a0aec0", fontStyle:"italic", marginBottom:8, lineHeight:1.5 }}>{j.notes}</div>}
-                  <div>
-                    {(j.tags || []).map(function(t, i) { return <span key={i} style={STYLES.tag}>{t}</span>; })}
-                  </div>
+                  {j.notes&&<div style={{fontSize:10,color:C.textDim,fontStyle:"italic",marginBottom:8,lineHeight:1.6}}>{j.notes}</div>}
+                  <div>{(j.tags||[]).map(function(t,i){return <span key={i} style={S.tag}>{t}</span>;})}</div>
                 </Card>
               );
             })}
           </div>
         )}
 
-        {tab === "import" && (
+        {tab==="import"&&(
           <div>
             <Card>
-              <div style={STYLES.sectionTitle}>Import IBKR Activity Statement</div>
-              <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:16, lineHeight:1.7 }}>
-                Export your Activity Statement from IBKR as a CSV file, then upload it below. New positions will be merged without duplicating existing tickers.
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:12}}>Import IBKR Activity Statement</div>
+              <div style={{fontSize:11,color:C.textDim,marginBottom:14,lineHeight:1.8}}>Export your Activity Statement from IBKR as a CSV file. Positions will be fully replaced on import. New trades are added to your journal without duplicates.</div>
+              <div style={{fontSize:10,color:C.textFaint,marginBottom:10}}>In IBKR: Reports &gt; Activity &gt; Statements &gt; Activity Statement &gt; CSV</div>
+              <div onClick={function(){fileRef.current&&fileRef.current.click();}} style={{border:"1px dashed rgba(6,214,160,0.35)",borderRadius:6,padding:28,textAlign:"center",cursor:"pointer",background:"rgba(6,214,160,0.04)"}}>
+                <div style={{fontSize:28,marginBottom:8}}>^</div>
+                <div style={{fontSize:12,color:C.textMid}}>Tap to upload IBKR Activity Statement CSV</div>
+                <div style={{fontSize:9,color:C.textFaint,marginTop:4}}>Imports: Stocks, Options, Spreads, Trades</div>
+                <input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={handleFile} />
               </div>
-              <div style={{ fontSize:10, color:"#4a5568", marginBottom:8 }}>
-                In IBKR: Reports &gt; Activity &gt; Statements &gt; Activity Statement &gt; CSV
-              </div>
-              <div
-                onClick={function() { fileRef.current && fileRef.current.click(); }}
-                style={{ border:"1px dashed rgba(0,212,170,0.3)", borderRadius:4, padding:24, textAlign:"center", cursor:"pointer", background:"rgba(0,212,170,0.03)" }}
-              >
-                <div style={{ fontSize:24, marginBottom:8 }}>^</div>
-                <div style={{ fontSize:11, color:"#a0aec0" }}>Tap to upload IBKR Activity Statement CSV</div>
-                <div style={{ fontSize:9, color:"#4a5568", marginTop:4 }}>Parses: Open Positions, Trades</div>
-                <input ref={fileRef} type="file" accept=".csv" style={{ display:"none" }} onChange={handleFile} />
-              </div>
-              {importMsg && (
-                <div style={{ marginTop:12, padding:"8px 12px", background:"rgba(0,212,170,0.08)", border:"1px solid rgba(0,212,170,0.2)", borderRadius:3, fontSize:11, color:"#00d4aa" }}>
-                  {importMsg}
-                </div>
-              )}
+              {importMsg&&<div style={{marginTop:12,padding:"10px 14px",background:C.greenDim,border:"1px solid rgba(6,214,160,0.25)",borderRadius:4,fontSize:11,color:C.green}}>{importMsg}</div>}
             </Card>
-
             <Card>
-              <div style={STYLES.sectionTitle}>Manual NLV Update</div>
-              <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>Update your Net Liquidation Value directly from your IBKR portfolio screen.</div>
-              <Btn onClick={function() { setModal("nlv"); }}>Update NLV</Btn>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:10}}>Manual NLV Update</div>
+              <div style={{fontSize:11,color:C.textDim,marginBottom:12}}>Update your Net Liquidation Value directly from your IBKR portfolio screen.</div>
+              <Btn onClick={function(){setModal("nlv");}}>Update NLV</Btn>
             </Card>
-
             <Card>
-              <div style={STYLES.sectionTitle}>Reset All Data</div>
-              <div style={{ fontSize:11, color:"#6b7fa3", marginBottom:12 }}>
-                Clears all positions and journal entries from this device.
-                <span style={{ color:"#ff4444" }}> This cannot be undone.</span>
-              </div>
-              {!showReset
-                ? <BtnRed onClick={function() { setShowReset(true); }}>Reset Portfolio Data</BtnRed>
-                : (
-                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <span style={{ fontSize:11, color:"#ff4444" }}>Are you sure?</span>
-                    <BtnRed onClick={clearAllData}>Yes, Reset Everything</BtnRed>
-                    <Btn onClick={function() { setShowReset(false); }}>Cancel</Btn>
-                  </div>
-                )
-              }
-            </Card>
-
-            <Card>
-              <div style={STYLES.sectionTitle}>Current Data Summary</div>
-              {[
-                { label:"Stock positions",  val:stocks.length },
-                { label:"Option positions", val:options.length },
-                { label:"Spread positions", val:spreads.length },
-                { label:"Journal entries",  val:journal.length },
-                { label:"Income months",    val:income.length },
-              ].map(function(r, i) {
-                return (
-                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom: i < 4 ? "1px solid rgba(255,255,255,0.04)" : "none", fontSize:11 }}>
-                    <span style={{ color:"#6b7fa3" }}>{r.label}</span>
-                    <span style={{ color:"#00d4aa" }}>{r.val}</span>
-                  </div>
-                );
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:10}}>Current Data Summary</div>
+              {[{label:"Stock positions",val:stocks.length},{label:"Option positions",val:options.length},{label:"Spread positions",val:spreads.length},{label:"Journal entries",val:journal.length},{label:"Income months",val:income.length}].map(function(r,i){
+                return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:i<4?"1px solid "+C.border:"none",fontSize:11}}><span style={{color:C.textDim}}>{r.label}</span><span style={{color:C.green}}>{r.val}</span></div>;
               })}
+            </Card>
+            <Card>
+              <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:10}}>Reset All Data</div>
+              <div style={{fontSize:11,color:C.textDim,marginBottom:12}}>Clears all data from this device. <span style={{color:C.red}}>Cannot be undone.</span></div>
+              {!showReset
+                ?<BtnRed onClick={function(){setShowReset(true);}}>Reset Portfolio Data</BtnRed>
+                :<div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:C.red}}>Are you sure?</span><BtnRed onClick={clearAllData}>Yes, Reset</BtnRed><Btn onClick={function(){setShowReset(false);}}>Cancel</Btn></div>
+              }
             </Card>
           </div>
         )}
       </div>
 
-      {modal && (
-        <div style={STYLES.modalBg} onClick={function(e) { if (e.target === e.currentTarget) closeModal(); }}>
-          <div style={STYLES.modal}>
-            {modal === "nlv"     && <NLVModal     nlv={nlv}       onSave={function(v) { setNlv(v);    closeModal(); }} onClose={closeModal} />}
-            {modal === "stock"   && <StockModal               onSave={function(s) { setStocks(function(p) { return p.concat([Object.assign({},s,{id:uid()})]);  }); closeModal(); }} onClose={closeModal} />}
-            {modal === "option"  && <OptionModal              onSave={function(o) { setOptions(function(p) { return p.concat([Object.assign({},o,{id:uid()})]); }); closeModal(); }} onClose={closeModal} />}
-            {modal === "spread"  && <SpreadModal              onSave={function(s) { setSpreads(function(p) { return p.concat([Object.assign({},s,{id:uid()})]); }); closeModal(); }} onClose={closeModal} />}
-            {modal === "journal" && <JournalModal             onSave={function(j) { setJournal(function(p) { return [Object.assign({},j,{id:uid()})].concat(p); }); closeModal(); }} onClose={closeModal} />}
-            {modal === "income"  && <IncomeModal              onSave={function(m) { setIncome(function(p)  { return p.concat([m]);                               }); closeModal(); }} onClose={closeModal} />}
+      {modal&&(
+        <div style={S.modalBg} onClick={function(e){if(e.target===e.currentTarget)closeModal();}}>
+          <div style={S.modal}>
+            {modal==="nlv"     &&<NLVModal     nlv={nlv} onSave={function(v){setNlv(v);closeModal();}} onClose={closeModal} />}
+            {modal==="stock"   &&<StockModal   onSave={function(s){setStocks(function(p){return p.concat([Object.assign({},s,{id:uid()})]);});closeModal();}} onClose={closeModal} />}
+            {modal==="option"  &&<OptionModal  onSave={function(o){setOptions(function(p){return p.concat([Object.assign({},o,{id:uid()})]);});closeModal();}} onClose={closeModal} />}
+            {modal==="spread"  &&<SpreadModal  onSave={function(s){setSpreads(function(p){return p.concat([Object.assign({},s,{id:uid()})]);});closeModal();}} onClose={closeModal} />}
+            {modal==="journal" &&<JournalModal onSave={function(j){setJournal(function(p){return [Object.assign({},j,{id:uid()})].concat(p);});closeModal();}} onClose={closeModal} />}
+            {modal==="income"  &&<IncomeModal  onSave={function(m){setIncome(function(p){return p.concat([m]);});closeModal();}} onClose={closeModal} />}
           </div>
         </div>
       )}
 
-      <div style={{ padding:"12px 20px", borderTop:"1px solid rgba(255,255,255,0.05)", display:"flex", justifyContent:"space-between", fontSize:9, color:"#2d3748" }}>
+      <div style={{padding:"14px 24px",borderTop:"1px solid "+C.border,display:"flex",justifyContent:"space-between",fontSize:9,color:C.textFaint}}>
         <span>PORTFOLIO TERMINAL v2.0</span>
-        <span style={{ color:"#00d4aa" }}>* AUTO-SAVED TO DEVICE</span>
+        <span style={{color:C.green}}>* AUTO-SAVED TO DEVICE</span>
         <span>AUD/USD {AUD_USD}</span>
       </div>
     </div>
