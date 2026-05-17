@@ -16,7 +16,7 @@ function usePersistedState(key, defaultValue) {
 }
 
 function clearAllData() {
-  ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal","pt_income"].forEach(function(k) { localStorage.removeItem(k); });
+  ["pt_nlv","pt_stocks","pt_options","pt_spreads","pt_journal"].forEach(function(k) { localStorage.removeItem(k); });
   window.location.reload();
 }
 
@@ -48,13 +48,6 @@ var SEED_SPREADS = [
 var SEED_JOURNAL = [
   { id:"j1", date:"2026-04-27", ticker:"CVL", action:"SELL STOCK", price:1.48, qty:4963, pnl:2691, currency:"AUD", notes:"Sold CVL ASX. 54% gain.", tags:["exit","profit"] },
   { id:"j2", date:"2026-03-17", ticker:"NVDA", action:"SELL PUT", price:19.47, qty:1, pnl:574, currency:"USD", notes:"Sold NVDA Jan 2028 $140 Put. Target 70-80% profit.", tags:["premium","nvda"] },
-];
-
-var SEED_INCOME = [
-  { month:"2026-01", label:"Jan 26", premium:420 },
-  { month:"2026-02", label:"Feb 26", premium:680 },
-  { month:"2026-03", label:"Mar 26", premium:1240 },
-  { month:"2026-04", label:"Apr 26", premium:890 },
 ];
 
 function toUSD(val, cur) { return cur === "AUD" ? val * AUD_USD : val; }
@@ -320,19 +313,6 @@ function JournalModal(props) {
   );
 }
 
-function IncomeModal(props) {
-  var [f,setF]=useState({month:"",label:"",premium:""});
-  function upd(k,v){setF(function(p){return Object.assign({},p,{[k]:v});});}
-  return (
-    <div>
-      <ModalHeader title="Add Income Month" onClose={props.onClose} />
-      <Field label="Month (YYYY-MM)"><Inp type="month" value={f.month} onChange={function(e){var d=new Date(e.target.value+"-01");upd("month",e.target.value);upd("label",d.toLocaleString("default",{month:"short",year:"2-digit"}));}} /></Field>
-      <Field label="Premium Collected (USD)"><Inp type="number" value={f.premium} onChange={function(e){upd("premium",+e.target.value);}} /></Field>
-      <Btn style={{width:"100%",marginTop:8}} onClick={function(){if(f.month&&f.premium)props.onSave(f);}}>Add Month</Btn>
-    </div>
-  );
-}
-
 function SpreadCard(props) {
   var sp=props.sp;
   var dte=getDTE(sp.expiry);
@@ -425,7 +405,24 @@ export default function App() {
   var [options,setOptions]=usePersistedState("pt_options",SEED_OPTIONS);
   var [spreads,setSpreads]=usePersistedState("pt_spreads",SEED_SPREADS);
   var [journal,setJournal]=usePersistedState("pt_journal",SEED_JOURNAL);
-  var [income,setIncome]=usePersistedState("pt_income",SEED_INCOME);
+  var income = (function() {
+    var INCOME_ACTIONS = ["SELL PUT","SELL CALL","BUY OPTION","SELL OPTION","SELL SPREAD","CLOSE SPREAD","ROLL OPTION","ASSIGNMENT","EXPIRY"];
+    var buckets = {};
+    journal.forEach(function(j) {
+      if (INCOME_ACTIONS.indexOf(j.action) === -1) return;
+      var month = (j.date||"").slice(0,7);
+      if (!month) return;
+      var pnlUsd = toUSD(j.pnl||0, j.currency||"USD");
+      if (!buckets[month]) {
+        var d = new Date(month+"-01");
+        buckets[month] = { month:month, label:d.toLocaleString("default",{month:"short",year:"2-digit"}), premium:0 };
+      }
+      buckets[month].premium += pnlUsd;
+    });
+    return Object.keys(buckets).sort().map(function(k){
+      return Object.assign({}, buckets[k], { premium: Math.round(buckets[k].premium) });
+    });
+  })();
   var [tab,setTab]=useState("overview");
   var [modal,setModal]=useState(null);
   var [importMsg,setImportMsg]=useState("");
@@ -647,19 +644,21 @@ export default function App() {
             <Card>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Monthly Premium Income</div>
-                <Btn onClick={function(){setModal("income");}}>+ Add Month</Btn>
+                <div style={{fontSize:9,color:C.textFaint,fontStyle:"italic"}}>derived from journal</div>
               </div>
-              {income.length>0&&(function(){
-                var maxVal=Math.max.apply(null,income.map(function(m){return m.premium;}));
+              {income.length>0?(function(){
+                var maxVal=Math.max.apply(null,income.map(function(m){return Math.abs(m.premium);}));
                 return (
                   <div>
                     <div style={{display:"flex",alignItems:"flex-end",gap:8,height:130,marginBottom:10}}>
                       {income.map(function(m,i){
-                        var pct=(m.premium/maxVal)*100, isLast=i===income.length-1;
+                        var pct=maxVal>0?(Math.abs(m.premium)/maxVal)*100:0;
+                        var isLast=i===income.length-1;
+                        var isNeg=m.premium<0;
                         return (
                           <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
-                            <div style={{fontSize:9,color:C.green,marginBottom:4}}>${m.premium}</div>
-                            <div style={{width:"100%",height:pct+"%",background:isLast?"linear-gradient(180deg,"+C.green+",rgba(6,214,160,0.2))":"rgba(6,214,160,0.2)",border:"1px solid rgba(6,214,160,0.3)",borderRadius:"3px 3px 0 0"}} />
+                            <div style={{fontSize:9,color:isNeg?C.red:C.green,marginBottom:4}}>${m.premium}</div>
+                            <div style={{width:"100%",height:pct+"%",background:isNeg?"rgba(255,107,107,0.2)":(isLast?"linear-gradient(180deg,"+C.green+",rgba(6,214,160,0.2))":"rgba(6,214,160,0.2)"),border:"1px solid "+(isNeg?"rgba(255,107,107,0.3)":"rgba(6,214,160,0.3)"),borderRadius:"3px 3px 0 0"}} />
                           </div>
                         );
                       })}
@@ -667,7 +666,9 @@ export default function App() {
                     <div style={{display:"flex",gap:8}}>{income.map(function(m,i){return <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:C.textFaint}}>{m.label}</div>;})}</div>
                   </div>
                 );
-              })()}
+              })():(
+                <div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No income yet. Add journal entries with PnL on options actions (SELL PUT, SELL CALL, etc.) to populate.</div>
+              )}
             </Card>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
               <Card><div style={S.lbl}>Total YTD</div><div style={Object.assign({},S.big,{color:C.green,fontSize:24})}>${totalIncome.toLocaleString()}</div></Card>
@@ -762,7 +763,6 @@ export default function App() {
             {modal==="option"  &&<OptionModal  onSave={function(o){setOptions(function(p){return p.concat([Object.assign({},o,{id:uid()})]);});closeModal();}} onClose={closeModal} />}
             {modal==="spread"  &&<SpreadModal  onSave={function(s){setSpreads(function(p){return p.concat([Object.assign({},s,{id:uid()})]);});closeModal();}} onClose={closeModal} />}
             {modal==="journal" &&<JournalModal onSave={function(j){setJournal(function(p){return [Object.assign({},j,{id:uid()})].concat(p);});closeModal();}} onClose={closeModal} />}
-            {modal==="income"  &&<IncomeModal  onSave={function(m){setIncome(function(p){return p.concat([m]);});closeModal();}} onClose={closeModal} />}
           </div>
         </div>
       )}
