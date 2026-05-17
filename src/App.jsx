@@ -405,19 +405,44 @@ export default function App() {
   var [options,setOptions]=usePersistedState("pt_options",SEED_OPTIONS);
   var [spreads,setSpreads]=usePersistedState("pt_spreads",SEED_SPREADS);
   var [journal,setJournal]=usePersistedState("pt_journal",SEED_JOURNAL);
+  // Hybrid cash-flow income: premium received on opens, PnL on closes/rolls.
+  // EXPIRY and ASSIGNMENT = $0 (premium already counted at open).
+  function cashFlowFor(j) {
+    var price = +j.price || 0;
+    var qty = +j.qty || 0;
+    var pnl = +j.pnl || 0;
+    var contractValue = price * qty * 100;
+    switch (j.action) {
+      case "SELL PUT":
+      case "SELL CALL":
+      case "SELL OPTION":
+        return contractValue;       // cash in
+      case "BUY OPTION":
+        return -contractValue;       // cash out
+      case "SELL SPREAD":
+      case "CLOSE SPREAD":
+      case "ROLL OPTION":
+        return pnl;                  // net of the action, signed
+      case "EXPIRY":
+      case "ASSIGNMENT":
+        return 0;                    // already counted at open
+      default:
+        return 0;                    // stocks etc don't count as options income
+    }
+  }
   var income = (function() {
-    var INCOME_ACTIONS = ["SELL PUT","SELL CALL","BUY OPTION","SELL OPTION","SELL SPREAD","CLOSE SPREAD","ROLL OPTION","ASSIGNMENT","EXPIRY"];
     var buckets = {};
     journal.forEach(function(j) {
-      if (INCOME_ACTIONS.indexOf(j.action) === -1) return;
+      var cf = cashFlowFor(j);
+      if (cf === 0) return;
       var month = (j.date||"").slice(0,7);
       if (!month) return;
-      var pnlUsd = toUSD(j.pnl||0, j.currency||"USD");
+      var cfUsd = toUSD(cf, j.currency||"USD");
       if (!buckets[month]) {
         var d = new Date(month+"-01");
         buckets[month] = { month:month, label:d.toLocaleString("default",{month:"short",year:"2-digit"}), premium:0 };
       }
-      buckets[month].premium += pnlUsd;
+      buckets[month].premium += cfUsd;
     });
     return Object.keys(buckets).sort().map(function(k){
       return Object.assign({}, buckets[k], { premium: Math.round(buckets[k].premium) });
@@ -644,7 +669,7 @@ export default function App() {
             <Card>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Monthly Premium Income</div>
-                <div style={{fontSize:9,color:C.textFaint,fontStyle:"italic"}}>derived from journal</div>
+                <div style={{fontSize:9,color:C.textFaint,fontStyle:"italic"}}>cash flow from journal</div>
               </div>
               {income.length>0?(function(){
                 var maxVal=Math.max.apply(null,income.map(function(m){return Math.abs(m.premium);}));
@@ -667,7 +692,7 @@ export default function App() {
                   </div>
                 );
               })():(
-                <div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No income yet. Add journal entries with PnL on options actions (SELL PUT, SELL CALL, etc.) to populate.</div>
+                <div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No options activity yet. Log SELL PUT, SELL CALL, BUY OPTION, SELL/CLOSE/ROLL SPREAD entries to populate.</div>
               )}
             </Card>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
