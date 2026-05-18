@@ -478,13 +478,34 @@ export default function App() {
   var [modal,setModal]=useState(null);
   var [importMsg,setImportMsg]=useState("");
   var [showReset,setShowReset]=useState(false);
+  var [incomeYear,setIncomeYear]=useState("all");
+  var [incomeMode,setIncomeMode]=useState("alltime");
   var fileRef=useRef();
 
   var stockPL=stocks.reduce(function(s,p){return s+toUSD((p.lastPrice-p.avgPrice)*p.shares,p.currency);},0);
-  var totalIncome=income.reduce(function(s,m){return s+m.premium;},0);
-  var avgIncome=income.length?Math.round(totalIncome/income.length):0;
-  var monthlyYield=nlv>0?((avgIncome/nlv)*100).toFixed(2):"0";
-  var annualYield=nlv>0?((avgIncome*12/nlv)*100).toFixed(2):"0";
+  // Available years derived from income data, plus 'all'
+  var availableYears = (function(){
+    var ys = {};
+    income.forEach(function(m){ if(m.month) ys[m.month.slice(0,4)] = true; });
+    return Object.keys(ys).sort();
+  })();
+  // Filtered income for the chart and totals
+  var filteredIncome = incomeYear==="all"
+    ? income
+    : income.filter(function(m){ return m.month && m.month.slice(0,4)===incomeYear; });
+  // For "trailing 3mo": last 3 months by calendar date from filteredIncome (or zero-fill if fewer)
+  function getTrailingMonths(arr, n){
+    if (!arr.length) return [];
+    var sorted = arr.slice().sort(function(a,b){ return a.month<b.month?-1:1; });
+    return sorted.slice(-n);
+  }
+  var trailingMonths = getTrailingMonths(filteredIncome, 3);
+  var totalIncome = filteredIncome.reduce(function(s,m){return s+m.premium;},0);
+  var alltimeAvg = filteredIncome.length ? Math.round(totalIncome/filteredIncome.length) : 0;
+  var trailingAvg = trailingMonths.length ? Math.round(trailingMonths.reduce(function(s,m){return s+m.premium;},0)/trailingMonths.length) : 0;
+  var avgIncome = incomeMode==="trailing" ? trailingAvg : alltimeAvg;
+  var monthlyYield = nlv>0 ? ((avgIncome/nlv)*100).toFixed(2) : "0";
+  var annualYield = nlv>0 ? ((avgIncome*12/nlv)*100).toFixed(2) : "0";
   var progress=Math.min((nlv/GOAL)*100,100);
   var remaining=GOAL-nlv;
 
@@ -693,19 +714,39 @@ export default function App() {
 
         {tab==="income"&&(
           <div>
+            <Card style={{padding:"12px 16px",marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Year</span>
+                  <select style={Object.assign({},S.inp,{width:"auto",padding:"5px 10px",fontSize:11})} value={incomeYear} onChange={function(e){setIncomeYear(e.target.value);}}>
+                    <option value="all">All</option>
+                    {availableYears.map(function(y){return <option key={y} value={y}>{y}</option>;})}
+                  </select>
+                </div>
+                <div style={{display:"flex",gap:0,border:"1px solid "+C.border,borderRadius:4,overflow:"hidden"}}>
+                  {[{k:"alltime",l:"All-time"},{k:"trailing",l:"Trailing 3mo"}].map(function(opt){
+                    var active=incomeMode===opt.k;
+                    return (
+                      <button key={opt.k} onClick={function(){setIncomeMode(opt.k);}} style={{background:active?"rgba(6,214,160,0.15)":"transparent",border:"none",color:active?C.green:C.textDim,fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",cursor:"pointer"}}>{opt.l}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            </Card>
+
             <Card>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim}}>Monthly Premium Income</div>
                 <div style={{fontSize:9,color:C.textFaint,fontStyle:"italic"}}>cash flow from journal</div>
               </div>
-              {income.length>0?(function(){
-                var maxVal=Math.max.apply(null,income.map(function(m){return Math.abs(m.premium);}));
+              {filteredIncome.length>0?(function(){
+                var maxVal=Math.max.apply(null,filteredIncome.map(function(m){return Math.abs(m.premium);}));
                 return (
                   <div>
                     <div style={{display:"flex",alignItems:"flex-end",gap:8,height:130,marginBottom:10}}>
-                      {income.map(function(m,i){
+                      {filteredIncome.map(function(m,i){
                         var pct=maxVal>0?(Math.abs(m.premium)/maxVal)*100:0;
-                        var isLast=i===income.length-1;
+                        var isLast=i===filteredIncome.length-1;
                         var isNeg=m.premium<0;
                         return (
                           <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
@@ -715,16 +756,16 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <div style={{display:"flex",gap:8}}>{income.map(function(m,i){return <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:C.textFaint}}>{m.label}</div>;})}</div>
+                    <div style={{display:"flex",gap:8}}>{filteredIncome.map(function(m,i){return <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:C.textFaint}}>{m.label}</div>;})}</div>
                   </div>
                 );
               })():(
-                <div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No options activity yet. Log SELL PUT, SELL CALL, BUY OPTION, SELL/CLOSE/ROLL SPREAD entries to populate.</div>
+                <div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:40}}>No options activity{incomeYear!=="all"?" in "+incomeYear:""}. Log SELL PUT, SELL CALL, BUY OPTION, SELL/CLOSE/ROLL SPREAD entries to populate.</div>
               )}
             </Card>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
-              <Card><div style={S.lbl}>Total YTD</div><div style={Object.assign({},S.big,{color:C.green,fontSize:24})}>${totalIncome.toLocaleString()}</div></Card>
-              <Card><div style={S.lbl}>Monthly Avg</div><div style={Object.assign({},S.big,{fontSize:24})}>${avgIncome.toLocaleString()}</div></Card>
+              <Card><div style={S.lbl}>Total{incomeYear==="all"?"":" "+incomeYear}</div><div style={Object.assign({},S.big,{color:C.green,fontSize:24})}>${totalIncome.toLocaleString()}</div></Card>
+              <Card><div style={S.lbl}>{incomeMode==="trailing"?"3mo Avg":"Monthly Avg"}</div><div style={Object.assign({},S.big,{fontSize:24})}>${avgIncome.toLocaleString()}</div></Card>
               <Card><div style={S.lbl}>Annual Run Rate</div><div style={Object.assign({},S.big,{color:C.yellow,fontSize:24})}>${(avgIncome*12).toLocaleString()}</div></Card>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -734,7 +775,7 @@ export default function App() {
             <Card>
               <div style={{fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",color:C.textDim,marginBottom:10}}>Path to $8,000/mo</div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:8}}>
-                <span style={{color:C.textMid}}>Current avg</span><span style={{color:C.green}}>${avgIncome}/mo</span>
+                <span style={{color:C.textMid}}>{incomeMode==="trailing"?"3mo avg":"All-time avg"}</span><span style={{color:C.green}}>${avgIncome}/mo</span>
               </div>
               <BarFill pct={Math.min((avgIncome/8000)*100,100)} gradient={"linear-gradient(90deg,"+C.blue+","+C.green+")"} />
               <div style={{fontSize:9,color:C.textFaint,marginTop:5,textAlign:"right"}}>{((avgIncome/8000)*100).toFixed(1)}% of $8,000 target</div>
