@@ -116,8 +116,32 @@ function parseIBKRcsv(text) {
       var tprice=parseFloat((c[8]||"0").replace(/,/g,""))||0;
       var tpnl=parseFloat((c[13]||"0").replace(/,/g,""))||0;
       var tqn=parseFloat((c[7]||"0").replace(/,/g,""))||0;
-      var tact=tcat.indexOf("Options")!==-1?(tqn<0?"SELL OPTION":"BUY OPTION"):(tqn<0?"SELL":"BUY");
-      trades.push({id:uid(),date:td,ticker:tsym,action:tact,price:tprice,qty:tqty,pnl:tpnl,currency:tcur,notes:"Imported: "+tsym,tags:["imported"]});
+      // Skip rows with no usable trade data (subtotal artifacts, expiry rows with 0 price/qty)
+      if(tqty===0||!td||!tsym){ continue; }
+      // Skip Forex trades (e.g., AUD.USD)
+      if(tcat.indexOf("Forex")!==-1){ continue; }
+      var isOpt=tcat.indexOf("Options")!==-1;
+      var tact, ticker=tsym, optType=null, strike=null, expiry=null;
+      if(isOpt){
+        // Parse IBKR option symbol "AMZN 26JUN26 230 P" -> ticker/expiry/strike/type
+        var pts=tsym.split(/\s+/);
+        if(pts.length>=4){
+          ticker=pts[0];
+          expiry=parseExpiry(pts[1]);
+          strike=parseFloat(pts[2])||null;
+          optType=pts[3]==="P"?"PUT":pts[3]==="C"?"CALL":null;
+        }
+        // Action: SELL PUT / BUY PUT / SELL CALL / BUY CALL
+        if(optType){
+          tact=(tqn<0?"SELL ":"BUY ")+optType;
+        } else {
+          tact=tqn<0?"SELL OPTION":"BUY OPTION";
+        }
+      } else {
+        tact=tqn<0?"SELL STOCK":"BUY STOCK";
+      }
+      var noteDetail=isOpt&&strike?(ticker+" "+(expiry||"")+" $"+strike+" "+(optType||"")):tsym;
+      trades.push({id:uid(),date:td,ticker:ticker,action:tact,price:tprice,qty:tqty,pnl:tpnl,currency:tcur,notes:"Imported: "+noteDetail,tags:["imported"],optType:optType,strike:strike,expiry:expiry,rawSymbol:tsym});
     }
   }
   Object.keys(seen).forEach(function(key){
@@ -295,7 +319,7 @@ function JournalModal(props) {
         <div style={{flex:1}}><Field label="Ticker"><Inp value={f.ticker} onChange={function(e){upd("ticker",e.target.value.toUpperCase());}} /></Field></div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <div style={{flex:2}}><Field label="Action"><select style={S.inp} value={f.action} onChange={function(e){upd("action",e.target.value);}}><option>SELL PUT</option><option>SELL CALL</option><option>BUY STOCK</option><option>SELL STOCK</option><option>SELL SPREAD</option><option>CLOSE SPREAD</option><option>ROLL OPTION</option><option>ASSIGNMENT</option><option>EXPIRY</option></select></Field></div>
+        <div style={{flex:2}}><Field label="Action"><select style={S.inp} value={f.action} onChange={function(e){upd("action",e.target.value);}}><option>SELL PUT</option><option>BUY PUT</option><option>SELL CALL</option><option>BUY CALL</option><option>BUY STOCK</option><option>SELL STOCK</option><option>SELL SPREAD</option><option>CLOSE SPREAD</option><option>ROLL OPTION</option><option>ASSIGNMENT</option><option>EXPIRY</option></select></Field></div>
         <div style={{flex:1}}><Field label="Currency"><select style={S.inp} value={f.currency} onChange={function(e){upd("currency",e.target.value);}}><option>USD</option><option>AUD</option></select></Field></div>
       </div>
       <div style={{display:"flex",gap:10}}>
@@ -417,8 +441,10 @@ export default function App() {
       case "SELL CALL":
       case "SELL OPTION":
         return contractValue;       // cash in
+      case "BUY PUT":
+      case "BUY CALL":
       case "BUY OPTION":
-        return -contractValue;       // cash out
+        return -contractValue;      // cash out
       case "SELL SPREAD":
       case "CLOSE SPREAD":
       case "ROLL OPTION":
@@ -474,8 +500,9 @@ export default function App() {
         if(r.spreads.length) setSpreads(r.spreads);
         if(r.trades.length){
           setJournal(function(prev){
-            var ex=new Set(prev.filter(function(j){return j.tags&&j.tags.indexOf("imported")!==-1;}).map(function(j){return j.date+j.ticker+j.price+j.qty;}));
-            return r.trades.filter(function(t){return !ex.has(t.date+t.ticker+t.price+t.qty);}).concat(prev);
+            function dkey(j){ return (j.date||"")+"|"+(j.rawSymbol||j.ticker||"")+"|"+(j.price||0)+"|"+(j.qty||0); }
+            var ex=new Set(prev.filter(function(j){return j.tags&&j.tags.indexOf("imported")!==-1;}).map(dkey));
+            return r.trades.filter(function(t){return !ex.has(dkey(t));}).concat(prev);
           });
         }
         setImportMsg("Imported: "+r.stocks.length+" stocks, "+r.options.length+" options, "+r.spreads.length+" spreads, "+r.trades.length+" trades.");
